@@ -1,7 +1,28 @@
 # Domínio oficial: https://zytrix-lives.vercel.app
 # robots.txt controla rastreamento, não autorização. Áreas privadas são
 # protegidas pela autenticação/regras do Firebase e usam diretivas de página.
+
 User-agent: *
+Allow: /
+
+# OpenAI — rastreamento para resultados de busca do ChatGPT
+User-agent: OAI-SearchBot
+Allow: /
+
+# OpenAI — rastreamento para treinamento de modelos
+User-agent: GPTBot
+Allow: /
+
+# OpenAI — acesso usado por recursos do ChatGPT
+User-agent: ChatGPT-User
+Allow: /
+
+# Anthropic / Claude
+User-agent: ClaudeBot
+Allow: /
+
+# Google — uso do conteúdo por sistemas de IA, incluindo Gemini
+User-agent: Google-Extended
 Allow: /
 
 Sitemap: https://zytrix-lives.vercel.app/sitemap.xml
