@@ -4,12 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Zytrix — Plataforma de livestream</title>
-
-
-
-
-
-<link rel="stylesheet" href="assets/css/styles.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="shortcut icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/styles.css">
   <link rel="stylesheet" href="assets/css/features.css">
   <script type="application/ld+json">
   {
@@ -43,82 +40,22 @@
         "description": "Aplicação web de livestream que organiza transmissões integradas da Twitch e Kick e oferece contas, perfis, categorias, chat em tempo real, acompanhamento de streamers e recursos de Zy Coins.",
         "featureList": [
           "Descoberta de transmissões ao vivo",
-          "Players integrados da Twitch e Kick",
-          "Contas e perfis de usuário",
-          "Configuração manual de live",
+          "Integração com Twitch e Kick",
+          "Perfis de streamers",
+          "Categorias",
           "Chat em tempo real",
-          "Seguir streamers e acompanhar lives",
-          "Categorias e subcategorias",
+          "Acompanhamento de streamers",
           "Zy Coins"
-        ],
-        "publisher": { "@id": "https://zytrix-lives.vercel.app/#organization" }
+        ]
       }
     ]
   }
   </script>
-  <meta name="description" content="Assista às melhores lives, descubra novos criadores e faça parte da comunidade Zytrix.">
-  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
-  <meta name="googlebot" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
-  <link rel="canonical" href="https://zytrix-lives.vercel.app/">
-  <meta property="og:locale" content="pt_BR">
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Zytrix">
-  <meta property="og:title" content="Zytrix — Plataforma de livestream">
-  <meta property="og:description" content="Assista às melhores lives, descubra novos criadores e faça parte da comunidade Zytrix.">
-  <meta property="og:url" content="https://zytrix-lives.vercel.app/">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Zytrix — Plataforma de livestream">
-  <meta name="twitter:description" content="Assista às melhores lives, descubra novos criadores e faça parte da comunidade Zytrix.">
-<link rel="stylesheet" href="/assets/css/policies.css">
 </head>
 <body>
-  <!-- deploy: account deletion + admin penalties -->
-  <div data-header></div>
-  <main class="main">
-    <div class="container">
-      <section class="hero">
-        <div class="eyebrow">TRANSMISSÕES AO VIVO</div>
-        <h1>O seu mundo. <span>Ao vivo.</span></h1>
-        <p>Assista às melhores lives, descubra novos criadores e faça parte da comunidade Zytrix.</p>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:22px">
-          <a class="btn btn-primary" href="ao-vivo.html">Ver lives</a>
-        </div>
-      </section>
-
-      <section class="section">
-        <div class="section-head">
-          <h2>Destaques</h2>
-          <a class="muted" href="ao-vivo.html">Ver todas →</a>
-        </div>
-        <div class="grid grid-3" id="featured"><div class="state">Carregando...</div></div>
-      </section>
-
-      <section class="section">
-        <div class="section-head">
-          <div><div class="eyebrow">Explore</div><h2>Encontre conteúdo por categoria</h2></div>
-          <a class="muted" href="categorias.html">Ver categorias →</a>
-        </div>
-        <div class="grid grid-4" id="home-categories"></div>
-      </section>
-
-      <section class="section">
-        <div class="section-head">
-          <div><div class="eyebrow">Agora</div><h2>Ao vivo na Zytrix</h2></div>
-          <a class="btn" href="ao-vivo.html">Explorar lives</a>
-        </div>
-        <div class="grid grid-4" id="live-now"><div class="state">Carregando...</div></div>
-      </section>
-
-      <section class="section">
-        <div class="grid grid-2">
-          <div class="card panel"><h2>Recursos da Zytrix</h2><p class="muted">Conheça os recursos para assistir, interagir, acompanhar criadores e configurar transmissões.</p><a href="recursos.html">Conhecer os recursos →</a></div>
-          <div class="card panel"><h2>Conheça a Zytrix</h2><p class="muted">Saiba mais sobre a plataforma, como ela funciona e como Twitch, Kick e Firebase fazem parte da experiência.</p><a href="sobre.html">Sobre a Zytrix →</a></div>
-        </div>
-      </section>
-    </div>
-  </main>
-  <div data-footer><footer class="site-footer container"><nav class="governance-links" aria-label="Políticas e segurança"><a href="/termos">Termos</a><a href="/privacidade">Privacidade</a><a href="/diretrizes-da-comunidade">Diretrizes da Comunidade</a><a href="/denuncias-e-moderacao">Denúncias e Moderação</a><a href="/conteudo-proibido">Conteúdo Proibido</a><a href="/politicas">Central de políticas</a></nav></footer></div>
+  <a class="skip-link" href="#principal">Pular para o conteúdo</a>
+  <div id="app"></div>
+  <script type="module" src="assets/js/ui.js"></script>
   <script type="module" src="assets/js/home.js"></script>
-  <script type="module" src="assets/js/global-features.js"></script>
 </body>
 </html>
