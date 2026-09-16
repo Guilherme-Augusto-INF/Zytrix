@@ -7,6 +7,7 @@ Versão web tradicional do Zytrix, sem React e sem Figma Sites.
 A versão Web está publicada em:
 
 https://zytrix-lives.vercel.app
+https://zytrix-web.vercel.app☻
 
 ## Tecnologias
 
