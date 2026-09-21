@@ -65,4 +65,6 @@ The Performance Advisor's multiple-permissive-policy warnings were corrected by 
 
 Staging database foundation: **PASS**.
 
-Overall migration/cutover: **NOT READY**. Real Firebase/Auth/Storage exports, data reconciliation, full Auth/OAuth, Storage, Realtime, frontend adapters, Vercel preview and production smoke testing remain required.
+The migration branch produced a Vercel Preview in READY state and the protected login page returned HTTP 200. This validates packaging/deployment only; it is not functional parity because the branch intentionally still uses Firebase and authenticated end-to-end smoke tests have not run.
+
+Overall migration/cutover: **NOT READY**. Real Firebase/Auth exports, data reconciliation, full Auth/OAuth, Storage, Realtime, frontend adapters, authenticated Preview validation and production smoke testing remain required.

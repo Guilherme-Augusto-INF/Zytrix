@@ -27,7 +27,7 @@ Status is evidence-based. `NOT VERIFIED` is never treated as pass.
 | Concurrency | PARTIAL | parallel username and Zy Coin overspend tests pass | follow, poll, chat, reward, viewer and moderation races |
 | Performance | PARTIAL | Advisor reviewed; targeted FK/query indexes applied | production-like data + EXPLAIN ANALYZE |
 | Frontend | FAIL | still imports Firebase directly; repository/history secret scan passed | migrate by domain through services; verify Vercel env scopes |
-| Preview | NOT VERIFIED | Vercel project identified | Supabase staging env and preview deploy |
+| Preview | NOT VERIFIED | Vercel Preview for commit `bceb87f` built READY; protected login page returned HTTP 200 | configure Supabase preview env and complete authenticated functional smoke tests |
 | Production | FAIL | production still Firebase; intentional | all gates + explicit cutover approval |
 | Backup | PARTIAL | baseline Git commit and Console counts recorded; Firebase preserved | Firestore/Auth machine-readable export |
 | Rollback | PARTIAL | documented plan; Firebase preserved | delta replay rehearsal and window decision |
