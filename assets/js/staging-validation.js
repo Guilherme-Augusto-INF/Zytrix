@@ -105,10 +105,10 @@ try {
     submit.disabled = true;
     try {
       await call('profile.recover', payload); // Explicit opt-in only; never invoked by login/check.
-      recoveryResult.textContent = 'Novo perfil criado no staging. Nenhum dado foi alterado no Firebase.';
       recoveryForm.reset();
       // Refresh the read-only account view and remove the recovery form.
       await check();
+      status.textContent = 'Novo perfil criado no staging. Nenhum dado foi alterado no Firebase.';
     } catch (error) {
       const message = {
         conflict: 'Este nome já está em uso. Escolha outro.',
