@@ -1,6 +1,8 @@
 -- Zytrix Firestore -> Neon native PostgreSQL relational foundation.
 -- This migration is additive. It does not modify or delete Firebase data.
 
+BEGIN;
+
 create extension if not exists pgcrypto;
 create schema if not exists private;
 
@@ -708,3 +710,5 @@ comment on schema private is 'Server-only Zytrix data; never expose through the 
 comment on table private.firebase_user_map is 'Stable Firebase UID to internal PostgreSQL identity UUID mapping.';
 comment on table public.zy_coin_transactions is 'Append-only Zy Coins ledger; writes only through controlled RPC/backend.';
 comment on table public.audit_logs is 'Append-only audit trail for sensitive operations; contains no secrets or raw tokens.';
+
+COMMIT;
