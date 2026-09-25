@@ -9,8 +9,9 @@ export default async function handler(req,res) {
   if(req.headers['sec-fetch-site']==='cross-site')return res.status(403).json({error:'cross_site_denied'});
   let client;
   try {
-    const body=typeof req.body==='string'?JSON.parse(req.body):req.body;
-    if(!body||JSON.stringify(body).length>16384||typeof body.action!=='string')throw new ApiError('invalid_input');
+    let body;
+    try{body=typeof req.body==='string'?JSON.parse(req.body):req.body;}catch{throw new ApiError('invalid_input');}
+    if(!body||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body),'utf8')>16384||typeof body.action!=='string'||body.action.length>64)throw new ApiError('invalid_input');
     const identity=await authenticate(req);
     client=await platformPool().connect();
     await client.query('begin');

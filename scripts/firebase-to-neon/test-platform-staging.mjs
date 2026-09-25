@@ -61,6 +61,26 @@ try{
  await executePlatform(client,userA,'follow.set',{channelId:uidB,following:true});
  assert.equal((await client.query('select count(*)::int as n from public.follows where follower_id=$1 and channel_id=$2',[a,channel])).rows[0].n,1);
  await executePlatform(client,userA,'follow.set',{channelId:uidB,following:false});checks.push('following is idempotent');
+ const ownChannel=await executePlatform(client,userA,'channel.save',{name:'Staging fixture',slug:'fixture-'+randomUUID(),description:'',visibility:'private'});
+ assert.equal(ownChannel.channel.id,uidA);
+ assert.equal((await executePlatform(client,userA,'channel.mine')).lives.length,0);
+ const creation={title:'Private fixture',description:'',playbackURL:'https://www.twitch.tv/example',visibility:'private',matureContent:false,requestKey:randomUUID()};
+ const created=await executePlatform(client,userA,'live.create',creation);
+ assert.equal((await executePlatform(client,userA,'live.create',creation)).id,created.id);
+ await assert.rejects(executePlatform(client,userA,'live.create',{...creation,title:'Changed'}),e=>e.code==='request_key_conflict');
+ await assert.rejects(executePlatform(client,userA,'live.create',{...creation,playbackURL:'javascript:alert(1)'}),e=>e.code==='invalid_playback_url');
+ await assert.rejects(executePlatform(client,userB,'live.get',{liveId:created.id}),e=>e.status===404);
+ const ownLive=await executePlatform(client,userA,'live.get',{liveId:created.id});assert.equal(ownLive.permissions.owner,true);
+ await executePlatform(client,userA,'live.state',{liveId:created.id,status:'live'});
+ assert.ok(!(await executePlatform(client,null,'lives.list')).lives.some(l=>l.id===created.id));
+ await executePlatform(client,userA,'live.state',{liveId:created.id,status:'ended'});
+ assert.equal((await executePlatform(client,userB,'channel.mine')).lives.length,1);
+ checks.push('creator isolation, private feed exclusion, URL validation and idempotent live creation');
+ const profile=(await executePlatform(client,null,'profile.get',{uid:uidA})).profile;
+ await executePlatform(client,userA,'profile.update',{username:profile.username,bio:'Updated biography'});
+ await assert.rejects(executePlatform(client,userA,'profile.update',{username:'renamed-fixture',bio:''}),e=>e.code==='username_cooldown');
+ await assert.rejects(executePlatform(client,userB,'profile.update',{username:'missing-fixture',bio:''}),e=>e.code==='profile_missing');
+ checks.push('profile rename cooldown and deliberately missing profile preserved');
 
  // The public view cannot expose private lives, even to anonymous callers.
  await client.query("insert into public.profiles(user_id,username) values($1,$2)",[b,'staging_'+randomUUID().replaceAll('-','').slice(0,18)]);

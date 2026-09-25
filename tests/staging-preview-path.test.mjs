@@ -7,6 +7,7 @@ const root=resolve('hypothetical-zytrix-checkout');
 test('local staging preview serves only its isolated HTML and assets',()=>{
   assert.equal(resolveSafePreviewPath(root,'/'),resolve(root,'staging-validation.html'));
   assert.equal(resolveSafePreviewPath(root,'/staging-validation.html'),resolve(root,'staging-validation.html'));
+  assert.equal(resolveSafePreviewPath(root,'/staging.html'),resolve(root,'staging.html'));
   assert.equal(resolveSafePreviewPath(root,'/assets/js/staging-validation.js'),
     resolve(root,'assets/js/staging-validation.js'));
   assert.equal(resolveSafePreviewPath(root,'/assets/css/staging-validation.css'),

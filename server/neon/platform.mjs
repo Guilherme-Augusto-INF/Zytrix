@@ -1,4 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import { safeStreamingUrl } from '../../assets/js/security.js';
+import { parseStreamingSource } from '../../assets/js/streaming.js';
 
 export class ApiError extends Error {
   constructor(code, status = 400) { super(code); this.code = code; this.status = status; }
@@ -52,12 +54,63 @@ export async function executePlatform(c, identity, action, data = {}) {
         order by viewer_count desc, created_at desc, postgres_id limit 80`);
       return {lives: result.rows};
     }
+    case 'lives.list': {
+      const limit = data.limit ?? 40;
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100) fail('invalid_input');
+      const category = data.category == null ? null : text(data.category,1,120);
+      const rows = await c.query(`select firebase_id as id,streamer_uid as "streamerUid",channel_id as "channelId",
+        title,description,category_id as "categoryId",playback_url as "playbackURL",thumbnail_url as "thumbnailURL",
+        mature_content as "matureContent",viewer_count as "viewerCount",username,photo_url as "photoURL"
+        from public.live_feed where ($1::text is null or category_id=$1)
+        order by viewer_count desc,created_at desc,postgres_id limit $2`,[category,limit]);
+      return {lives:rows.rows};
+    }
+    case 'channel.mine': {
+      const u=await actor(c,identity);
+      const channel=(await c.query(`select firebase_id as id,name,slug,description,visibility
+        from public.channels where owner_id=$1 and deleted_at is null`,[u.id])).rows[0]??null;
+      const lives=channel?(await c.query(`select firebase_id as id,title,status,visibility,playback_url as "playbackURL"
+        from public.lives where owner_id=$1 and deleted_at is null order by created_at desc,id limit 100`,[u.id])).rows:[];
+      return {channel,lives};
+    }
+    case 'channel.save': {
+      const u=await actor(c,identity,true);
+      const name=text(data.name?.trim(),1,80),slug=text(data.slug,3,63),description=text(data.description??'',0,800);
+      if(!/^[a-z0-9][a-z0-9-]{2,62}$/.test(slug)||!['public','unlisted','private'].includes(data.visibility))fail('invalid_input');
+      // Deleted channels are deliberately not revived by an upsert.
+      const result=await c.query(`insert into public.channels(firebase_id,owner_id,name,slug,description,visibility)
+        values($1,$2,$3,$4,$5,$6) on conflict(owner_id) do update set name=$3,slug=$4,description=$5,visibility=$6
+        where channels.deleted_at is null returning firebase_id as id,name,slug,description,visibility`,
+        [u.firebase_uid,u.id,name,slug,description,data.visibility]);
+      if(!result.rowCount)fail('channel_unavailable',409);
+      return {channel:result.rows[0]};
+    }
+    case 'live.create': {
+      const u=await actor(c,identity,true),requestKey=key(data.requestKey);
+      const title=text(data.title?.trim(),1,120),description=text(data.description??'',0,2000);
+      const playbackURL=text(data.playbackURL,1,2048);
+      let url;try{url=new URL(playbackURL);}catch{fail('invalid_playback_url');}
+      if(url.protocol!=='https:'||url.username||url.password||!safeStreamingUrl(playbackURL)||!parseStreamingSource(playbackURL))fail('invalid_playback_url');
+      if(!['public','unlisted','private'].includes(data.visibility)||typeof data.matureContent!=='boolean')fail('invalid_input');
+      const channel=(await c.query('select id from public.channels where owner_id=$1 and deleted_at is null for update',[u.id])).rows[0];
+      if(!channel)fail('channel_missing',404);
+      const category=data.categoryId==null||data.categoryId===''?null:text(data.categoryId,1,120);
+      if(category&&!(await c.query('select 1 from public.categories where id=$1 and active',[category])).rowCount)fail('invalid_category');
+      const firebaseId='staging-'+createHash('sha256').update(u.id+':'+requestKey).digest('hex');
+      const old=(await c.query('select * from public.lives where firebase_id=$1',[firebaseId])).rows[0];
+      if(old){if(old.owner_id!==u.id||old.title!==title||old.description!==description||old.playback_url!==playbackURL||old.visibility!==data.visibility||old.mature_content!==data.matureContent||old.category_id!==category)fail('request_key_conflict',409);return {id:firebaseId};}
+      await c.query(`insert into public.lives(firebase_id,channel_id,owner_id,title,description,playback_url,visibility,mature_content,category_id)
+        values($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[firebaseId,channel.id,u.id,title,description,playbackURL,data.visibility,data.matureContent,category]);
+      return {id:firebaseId};
+    }
     case 'live.get': {
       const u=identity?await actor(c,identity):null;const l=await live(c,data.liveId,u);
       const owner=(await c.query('select firebase_uid from public.identities where id=$1',[l.owner_id])).rows[0];
       return {live:{id:l.firebase_id,title:l.title,description:l.description,status:l.status,streamerUid:owner.firebase_uid,
         categoryId:l.category_id,playbackURL:l.playback_url,thumbnailURL:l.thumbnail_url,matureContent:l.mature_content,
-        createdAt:l.created_at,startedAt:l.started_at,endedAt:l.ended_at}};
+        createdAt:l.created_at,startedAt:l.started_at,endedAt:l.ended_at},
+        permissions:{owner:l.owner_id===u?.id,moderator:u?await canModerate(c,u,l):false},
+        channelId:(await c.query('select firebase_id from public.channels where id=$1',[l.channel_id])).rows[0].firebase_id};
     }
     case 'live.state': {
       const u=await actor(c,identity,true);const l=await live(c,data.liveId,u,true);
@@ -151,8 +204,8 @@ export async function executePlatform(c, identity, action, data = {}) {
       if (!/^[A-Za-z0-9_.-]+$/.test(username)) fail('invalid_username');
       const bio=text(data.bio??'',0,500);
       if ((await c.query('select 1 from private.reserved_usernames where username_key=lower($1)',[username])).rowCount) fail('reserved_username');
-      // Lock this user's identity to serialize concurrent profile recovery.
-      await c.query('select id from public.identities where id=$1 for update',[u.id]);
+      // Serialize recovery without granting the web role UPDATE on identities.
+      await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['profile.recover:'+u.id]);
       if (!(await c.query('select 1 from public.user_accounts where user_id=$1',[u.id])).rowCount)
         fail('account_missing',404);
       if ((await c.query('select 1 from public.profiles where user_id=$1',[u.id])).rowCount)
