@@ -10,9 +10,9 @@ Produção: `zytrix-lives.vercel.app` corresponde ao projeto Vercel `zytrix-web`
 - [x] Adaptar esquema relacional completo do plano anterior; PostgreSQL não depende de `auth.users` do Supabase.
 - [x] Preparar exportação paginada e privada do Firestore, inventário de Auth sem hashes/senhas, UUID determinístico, transformações e importação para Neon staging.
 - [x] Integração Neon instalada; projeto existente `soft-water-98807259`, com branches Neon `production` e `staging` (confirmadas pelo usuário). O conector SQL ainda falha por incompatibilidade de schema de argumentos; validação manual no SQL Editor.
-- [ ] Confirmar estado ATUAL do Firebase; em levantamento anterior havia 19 identidades Auth e 20 documentos users/profiles. A diferença é BLOQUEADORA até reconciliar (não excluir documentos automaticamente).
+- [x] Exportação local confirmou estado atual **22 identidades Firebase Auth** e **295 documentos Firestore**; discrepâncias detalhadas abaixo. Corrigir exclusivamente em cópia de migração após decisão explícita; não excluir contas automaticamente.
 - [x] Usuário executou esquema 001 em Neon `staging`; validação 003 apresentou **52/52 tabelas, 0 ausentes, PASS** (captura de tela de 24/09/2026). Usuário também executou 002 e `SELECT COUNT(*) FROM public.live_feed` retornou **0**, esperado antes da importação. **Pendente:** testes reais de constraints/índices, autenticação e grants com role restrita.
-- [ ] Executar exportação privada Auth/Firestore e preflights. Verificar Storage antes do corte.
+- [x] Exportação local privada Auth/Firestore e preflights executados; **3 erros bloqueadores** encontrados, pendentes de remediação. [ ] Verificar Storage antes do corte.
 - [ ] Resolver anomalias (identidades órfãs, campos desconhecidos, relacionamentos). Importar para banco staging vazio e reconciliar contagens/checksums e saldo de cada carteira.
 - [x] Adicionar API piloto somente de leitura para a lista pública de lives, protegida por `NEON_READ_API_ENABLED=true` e credenciais runtime Neon limitadas. A API permanece desativada sem conexão configurada.
 - [ ] Implementar endpoints backend autenticados/autorizados restantes; migrar TODAS as leituras/escritas da plataforma para PostgreSQL, projetar realtime/chat e remover Firestore do cliente.
@@ -25,11 +25,13 @@ Produção: `zytrix-lives.vercel.app` corresponde ao projeto Vercel `zytrix-web`
 - **Esses resultados verificam a estrutura, não a migração dos dados reais nem as políticas de autorização.**
 
 ## Preflight real mais recente (dados agregados, sem dados pessoais)
-- Exportação local: **22 usuários Auth** e **295 documentos Firestore**; 23 documentos de usuários, 22 perfis e 8 carteiras.
-- Auth: **1 documento de usuário sem identidade**, **1 perfil sem identidade**; determinar se ambos pertencem ao mesmo UID antes de qualquer decisão. Nenhum e-mail duplicado. **1 identidade válida sem perfil**.
-- Firestore: **1 conflito de nome de usuário normalizado**; averiguar se envolve o perfil órfão. Não renomear silenciosamente.
-- **14 contas sem carteira**: inspecionar esquema de criação sob demanda; apenas criar saldo inicial zero para contas verificadas, jamais inventar saldo histórico. Revisar separadamente carteira e dependências da identidade órfã.
-- Importação permanece **BLOQUEADA** até classificação e remediação verificadas. Não eliminar usuário/perfil órfão nem alterar dados de origem sem análise.
+- Snapshot local: **22 usuários Auth**, **295 documentos Firestore**, **23 users**, **22 profiles** e **8 wallets**.
+- **Órfão:** 1 user e 1 profile com o MESMO UID não presente no Auth; esse UID é referenciado por **1 documento em featuredStreamers**. Sem carteira identificada. A referência deve ser preservada para auditoria; desativação/omissão do destaque na nova plataforma depende da decisão e checagem de outros relacionamentos.
+- **Perfil faltante:** 1 conta Auth válida com documento `users` existente e sem `profiles`; usuário informou ter excluído manualmente documento em profiles. Antes de restaurar, inspecionar os campos disponíveis no user doc e histórico/backups locais; se não houver username anterior verificável, **não inventar histórico**. Propor nome provisório não colidente no destino com sinalização de recuperação de perfil.
+- **Username duplicado:** 2 perfis chamados `prendedor`, **ambos têm contas Auth válidas**, não relacionados ao UID órfão. Há apenas 1 conflito de username normalizado. Resolver com consentimento do proprietário (preferência de qual preserva o username); fallback documentado se aprovado: perfil mais antigo mantém o nome, o outro recebe nickname provisório exclusivo apenas no destino.
+- **14 contas Auth sem carteira** são aviso, não justificativa para recriar automaticamente saldo; cruzar com ledger de transações e pedidos antes de criar carteira com zero.
+- Exportação fonte é snapshot sujeito a ficar desatualizado; antes do corte final fazer novo export/reconciliação. Não copiar ou divulgar UIDs/e-mails/chaves em logs/PR.
+- **Status: importação bloqueada** até resolver conflito de nome, perfil faltante e destino seguro dos dados órfãos, e executar novamente os preflights com resultados apropriados. Nenhuma alteração no Firebase de origem sem solicitação explícita.
 
 ## Comandos para operador AUTORIZADO em máquina privada (NUNCA executar em CI público)
 ```bash
