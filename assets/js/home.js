@@ -14,6 +14,7 @@ import { header, footer, liveCard, categories, icons, escapeHtml } from './ui.js
 import { watchPublicLiveFeed } from './live-feed-source.js';
 import {
   getPlatformPreferences,
+  getDiscoveryContext,
   watchFollowedCategories,
   recommendationScore,
   filterMature
@@ -58,14 +59,9 @@ async function loadContext() {
     return;
   }
   preferences = await getPlatformPreferences(user.uid).catch(() => preferences);
-  const [followingSnap, historySnap] = await Promise.all([
-    getDocs(collection(db, 'users', user.uid, 'following')).catch(() => null),
-    getDocs(collection(db, 'users', user.uid, 'watchHistory')).catch(() => null)
-  ]);
-  following = new Set(followingSnap?.docs?.map(item => item.id) || []);
-  const history = historySnap?.docs?.map(item => item.data()) || [];
-  history.sort((a,b) => (b.watchedAt?.seconds || 0) - (a.watchedAt?.seconds || 0));
-  recentStreamers = new Set(history.slice(0,12).map(item => item.streamerUid).filter(Boolean));
+  const context = await getDiscoveryContext(user.uid).catch(() => ({following:[],history:[]}));
+  following = new Set(context.following);
+  recentStreamers = new Set(context.history.slice(0,12).map(item => item.streamerUid).filter(Boolean));
   stopCategories = watchFollowedCategories(user.uid, value => {
     followedCategories = value;
     renderLives();

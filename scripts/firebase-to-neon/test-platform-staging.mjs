@@ -13,6 +13,8 @@ try{
  await client.connect();await client.query('begin');
  const a=randomUUID(),b=randomUUID(),uidA='staging-test-'+randomUUID(),uidB='staging-test-'+randomUUID();
  const channel=randomUUID(),stream=randomUUID(),streamId='test-'+randomUUID();
+ const category='fixture-'+randomUUID();
+ await client.query('insert into public.categories(id,name) values($1,$2)',[category,'Test category']);
  await client.query('insert into public.identities(id,firebase_uid) values($1,$2),($3,$4)',[a,uidA,b,uidB]);
  await client.query(`insert into public.user_accounts(user_id,firebase_uid,zytrix_id,email,provider)
    values($1,$2,$3,$4,'password')`,[a,uidA,'ZY-'+randomUUID().replaceAll('-','').slice(0,12),'test-'+randomUUID()+'@example.invalid']);
@@ -21,6 +23,16 @@ try{
  await client.query('insert into public.wallets(user_id,balance) values($1,100),($2,0)',[a,b]);
  if(process.argv.includes('--runtime-role'))await client.query('set local role zytrix_staging_app');
  const userA={uid:uidA,emailVerified:true};const userB={uid:uidB,emailVerified:true};
+ await executePlatform(client,userA,'categories.follow',{categoryId:category,following:true});
+ await executePlatform(client,userA,'categories.follow',{categoryId:category,following:true});
+ assert.deepEqual((await executePlatform(client,userA,'categories.followed')).categories,[category]);
+ assert.deepEqual((await executePlatform(client,userB,'categories.followed')).categories,[]);
+ await executePlatform(client,userB,'categories.follow',{categoryId:category,following:false});
+ assert.deepEqual((await executePlatform(client,userA,'categories.followed')).categories,[category]);
+ await executePlatform(client,userA,'categories.follow',{categoryId:category,following:false});
+ assert.deepEqual((await executePlatform(client,userA,'categories.followed')).categories,[]);
+ await assert.rejects(executePlatform(client,userA,'categories.follow',{categoryId:'missing-'+randomUUID(),following:true}),e=>e.status===404);
+ checks.push('category following is idempotent and isolated between accounts');
  const recovered=await executePlatform(client,userA,'profile.recover',{username:'staging_'+randomUUID().replaceAll('-','').slice(0,18),bio:''});
  assert.equal(recovered.recovered,true);
  await assert.rejects(executePlatform(client,userA,'profile.recover',{username:'AnotherName'}),e=>e.code==='profile_already_exists');
@@ -49,6 +61,9 @@ try{
  await executePlatform(client,userA,'viewer.heartbeat',{liveId:streamId});
  assert.equal((await client.query('select count(*)::int as n from private.live_unique_views where live_id=$1 and user_id=$2',[stream,a])).rows[0].n,1);
  await executePlatform(client,userA,'viewer.leave',{liveId:streamId});checks.push('preferences, notifications and unique viewer accounting');
+ assert.equal((await executePlatform(client,userA,'discovery.context')).history.some(l=>l.id===streamId),true);
+ assert.equal((await executePlatform(client,userB,'discovery.context')).history.length,0);
+ checks.push('watch history stays private to its viewer');
  await assert.rejects(executePlatform(client,userA,'live.state',{liveId:streamId,status:'ended'}),e=>e.code==='forbidden');
  await executePlatform(client,userB,'live.state',{liveId:streamId,status:'ended'});
  await assert.rejects(executePlatform(client,userA,'chat.send',{liveId:streamId,text:'after end',requestKey:randomUUID()}),e=>e.code==='live_not_active');
@@ -93,6 +108,7 @@ try{
  await assert.rejects(executePlatform(client,null,'chat.list',{liveId:streamId}),e=>e.status===404);checks.push('private live denied to anonymous user');
  feed=await executePlatform(client,null,'live.feed',{});
  assert.equal(feed.lives.some(row=>row.id===streamId),false);
+ assert.equal((await executePlatform(client,userA,'discovery.context')).history.some(l=>l.id===streamId),false);
  checks.push('anonymous public feed omits private live');
 
  await client.query('rollback');await writeFile(reportFile,JSON.stringify({status:'PASS',checks,fixtures:'ROLLED_BACK'},null,2));

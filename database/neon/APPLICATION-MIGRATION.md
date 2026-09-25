@@ -24,9 +24,9 @@ API is deliberately not substituted globally until all operations are covered.
   parameterized SQL, atomic ledger/alert writes and idempotent retries.
 - Private staging role with table/column grants, never migration-owner credentials.
 - Anonymous read-only `live.feed` action uses `public.live_feed` view; rejects arbitrary filters and excludes hidden/non-public lives at the SQL view.
-- Home, Ao Vivo, Categoria and Explorar public feed readers are conditionally migrated via the shared `watchPublicLiveFeed` adapter. They query `/api/v1/config` first: staging=true reads only PostgreSQL (polling every 15s); staging=false keeps existing Firestore subscriptions. On staging API errors they fail closed without silently mixing databases. Personalization/followed categories in those screens still use Firebase.
+- Home, Ao Vivo, Categoria and Explorar public feed readers are conditionally migrated via the shared `watchPublicLiveFeed` adapter. They query `/api/v1/config` first: staging=true reads only PostgreSQL (polling every 15s); staging=false keeps existing Firestore subscriptions. On staging API errors they fail closed without silently mixing databases. Home and Explorar following/history now use discovery.context in staging. Shared preferences and followed-category helpers also select PostgreSQL in staging and never fall back to Firebase on API errors.
 - The local isolated staging validation page now tests the PostgreSQL public feed anonymously.
-- Integration fixtures always rolled back. Thirteen scenario groups passed with the
+- Integration fixtures always rolled back. Fifteen scenario groups passed with the
   restricted runtime role, including creator, recovery, public-feed and permission scenarios.
   Real browser sign-in verification remains pending.
   The user reported successful sign-in in an external Chrome/Edge browser on
@@ -39,7 +39,7 @@ API is deliberately not substituted globally until all operations are covered.
 - Account bootstrap/deletion. Missing profile recovery is explicit and opt-in through the isolated validation page; never automatically recreate profiles on login.
 - Advanced channel/live settings, schedules, channel bios/social links, creator codes,
   channel membership and moderator management.
-- Watch progress/achievements, followed categories, attribution, full notifications.
+- Watch progress/achievements, attribution, full notifications.
 - Enquetes/predictions, clips/VOD, reward redemption and fulfillment.
 - Promotions/claims, order/payment workflows and administrative credit adjustments.
 - Reporting/governance/policy acceptance/global moderation/admin screens and audit trail.
@@ -72,6 +72,12 @@ inside the fixture transaction; the runtime role never inherits the owner.
 
 Firebase token verification reference: https://firebase.google.com/docs/auth/admin/verify-id-tokens
 
-Explorar stage mode uses Neon only for its **public live feed**. User personalization, clips and schedules are still Firestore until their respective backend endpoints are migrated. This separation is intentional and must be addressed before production cutover.
+Explorar stage mode uses Neon only for its **public live feed**. Clips and schedules still use Firestore until their backend endpoints are migrated. Personalization now has an authenticated staging API. This separation is intentional and must be addressed before production cutover.
 
 The isolated `staging-validation.html` offers optional profile recovery **only** after a real authenticated read detects an account without a profile and Firebase reports a verified email. Submission requires an explicit checkbox; ordinary login and verification remain read-only. The `005_staging_profile_recovery_grant.sql` permissions were independently exercised successfully by the combined staging integration test on 2026-09-25. Recovery uses an advisory lock and does not require UPDATE permission on identities. This staging-only form must not be used for production recovery until full cutover.
+
+## Personalization checkpoint (2026-09-25)
+
+Preferences read/write/listeners, category following and Home/Explorar discovery context now use PostgreSQL when staging is enabled. The isolated application also has categories and history screens. History excludes deleted and newly private streams, and never accepts a client-selected account. A shared backend selector caches configuration, fails closed and suppresses callbacks after unsubscribe. Production keeps the existing Firebase path.
+
+007_staging_personalization_grants.sql was applied only to staging. Fifteen rolled-back database scenarios and 40 application tests passed. Post-test reconciliation of the imported snapshot passed. Category following accepts only existing active catalog entries. No progress rewards or monetary history were fabricated. Remaining original pages still need full migration; this is not authorization for production cutover.

@@ -41,6 +41,38 @@ async function canModerate(c, user, row) {
 export async function executePlatform(c, identity, action, data = {}) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) fail('invalid_input');
   switch (action) {
+    case 'categories.list': {
+      const r=await c.query('select id,name,parent_id as "parentId" from public.categories where active order by sort_order,name,id limit 500');
+      return {categories:r.rows};
+    }
+    case 'categories.followed': {
+      const u=await actor(c,identity);
+      const r=await c.query('select category_id from public.followed_categories where user_id=$1 order by category_id',[u.id]);
+      return {categories:r.rows.map(r=>r.category_id)};
+    }
+    case 'categories.follow': {
+      const u=await actor(c,identity,true),category=id(data.categoryId);
+      if(typeof data.following!=='boolean')fail('invalid_input');
+      if(data.following){
+        if(!(await c.query('select 1 from public.categories where id=$1 and active',[category])).rowCount)fail('category_not_found',404);
+        await c.query('insert into public.followed_categories(user_id,category_id) values($1,$2) on conflict do nothing',[u.id,category]);
+      }else await c.query('delete from public.followed_categories where user_id=$1 and category_id=$2',[u.id,category]);
+      return {following:data.following};
+    }
+    case 'discovery.context': {
+      const u=await actor(c,identity);
+      const following=await c.query(`select i.firebase_uid as uid from public.follows f
+        join public.channels ch on ch.id=f.channel_id join public.identities i on i.id=ch.owner_id
+        where f.follower_id=$1 and ch.deleted_at is null and ch.visibility='public'
+        order by f.followed_at desc,ch.id limit 500`,[u.id]);
+      const history=await c.query(`select l.firebase_id as id,l.title,i.firebase_uid as "streamerUid",h.last_watched_at as "watchedAt"
+        from public.watch_history h join public.lives l on l.id=h.live_id
+        join public.channels ch on ch.id=l.channel_id join public.identities i on i.id=l.owner_id
+        where h.user_id=$1 and l.deleted_at is null and ch.deleted_at is null
+        and (l.owner_id=$1 or (l.visibility='public' and ch.visibility='public'))
+        order by h.last_watched_at desc,l.id limit 50`,[u.id]);
+      return {following:following.rows.map(r=>r.uid),history:history.rows};
+    }
     case 'live.feed': {
       // Public feed is deliberately sourced from the restricted SQL view.
       // No identity lookup, no raw table access and no arbitrary client filters.

@@ -22,7 +22,7 @@ function finish(form){form.append(el('button','Salvar',{type:'submit'}));return 
 function safeLink(url,label){try{const parsed=new URL(url);if(parsed.protocol==='https:'&&!parsed.username&&!parsed.password)return el('a',label,{href:parsed.href,target:'_blank',rel:'noopener noreferrer'});}catch{}return el('span','Endereço indisponível');}
 async function page(name,liveId){dispose();dispose=()=>{};const current=++generation;content.replaceChildren();status.textContent='Carregando…';
  const root=el('div');content.append(root);
- try{if(name==='feed')await feed(root);else if(name==='account')await account(root);else if(name==='wallet')await wallet(root);else if(name==='creator')await creator(root);else if(name==='live')await watch(root,liveId,current);
+ try{if(name==='feed')await feed(root);else if(name==='categories')await categories(root);else if(name==='history')await history(root);else if(name==='account')await account(root);else if(name==='wallet')await wallet(root);else if(name==='creator')await creator(root);else if(name==='live')await watch(root,liveId,current);
  if(current===generation)status.textContent='Staging pronto.';}catch(e){if(current===generation)report(e);}
 }
 async function feed(root){const [feed,{preferences}]=await Promise.all([call('lives.list'),call('preferences.get')]);const lives=feed.lives.filter(l=>!l.matureContent||!(preferences.safeMode||preferences.hideMatureContent));root.append(el('h2','Ao vivo'));
@@ -35,6 +35,14 @@ async function account(root){const [{account:me},{preferences:p}]=await Promise.
  const prefs=form('Preferências',async()=>{const data={};for(const input of prefs.querySelectorAll('input'))data[input.name]=input.checked;await call('preferences.update',data);status.textContent='Preferências salvas.';});
  for(const [name,label]of Object.entries({hideMatureContent:'Ocultar conteúdo adulto',safeMode:'Modo seguro',allowReactions:'Permitir reações',compactAlerts:'Alertas compactos'}))field(prefs,label,name,p[name],'checkbox',false);
  root.append(finish(prefs));
+}
+async function categories(root){const [{categories:items},{categories:followed}]=await Promise.all([call('categories.list'),call('categories.followed')]);
+ root.append(el('h2','Categorias'));if(!items.length)root.append(el('p','Nenhuma categoria disponível.'));
+ for(const category of items){const following=followed.includes(category.id),card=el('section');card.append(el('h3',category.name),button(following?'Deixar de seguir':'Seguir',async()=>{await call('categories.follow',{categoryId:category.id,following:!following});await page('categories');}));root.append(card);}
+}
+async function history(root){const {history:items}=await call('discovery.context');root.append(el('h2','Histórico de visualização'));
+ if(!items.length)root.append(el('p','Nenhuma transmissão disponível no seu histórico.'));
+ for(const item of items){const card=el('section');card.append(el('h3',item.title),el('p',new Date(item.watchedAt).toLocaleString('pt-BR')),button('Abrir transmissão',()=>page('live',item.id)));root.append(card);}
 }
 async function wallet(root){const [{wallet:w},{transactions}]=await Promise.all([call('wallet.get'),call('transactions.list')]);root.append(el('h2','Zy Coins'));
  if(!w){root.append(el('p','Sua conta ainda não tem carteira.'),button('Criar carteira com saldo zero',async()=>{await call('wallet.ensure');await page('wallet');}));return;}

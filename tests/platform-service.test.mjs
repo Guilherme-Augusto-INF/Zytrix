@@ -11,10 +11,10 @@ test('production refuses the staging application even when its flags are configu
  finally{for(const[name,value]of values)if(value===undefined)delete process.env[name];else process.env[name]=value;}
 });
 test('private actions reject absent and unverified identities before database access',async()=>{
-  for(const action of ['me','wallet.get','wallet.ensure','profile.update','profile.recover','chat.send','chat.delete','support.send','follow.set','channel.mine','channel.save','live.create']){
+  for(const action of ['me','wallet.get','wallet.ensure','profile.update','profile.recover','chat.send','chat.delete','support.send','follow.set','channel.mine','channel.save','live.create','categories.followed','categories.follow','discovery.context']){
     await assert.rejects(executePlatform(noDb,null,action,{}),e=>e instanceof ApiError&&e.status===401);
   }
-  for(const action of ['wallet.ensure','profile.update','profile.recover','chat.send','chat.delete','support.send','follow.set','channel.save','live.create']){
+  for(const action of ['wallet.ensure','profile.update','profile.recover','chat.send','chat.delete','support.send','follow.set','channel.save','live.create','categories.follow']){
     await assert.rejects(executePlatform(noDb,{uid:'test',emailVerified:false},action,{}),e=>e.code==='verified_email_required');
   }
 });
