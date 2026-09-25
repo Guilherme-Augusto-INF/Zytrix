@@ -1,5 +1,5 @@
 -- Read-only public projection for Neon API. Apply AFTER 001_foundation.sql.
--- The view intentionally excludes wallet/admin/private fields.
+-- The view intentionally excludes wallet/admin/private fields and non-public streams/channels.
 begin;
 create or replace view public.live_feed
 with (security_barrier=true)
@@ -29,7 +29,8 @@ left join lateral (
   where vs.live_id = l.id and vs.expires_at > now()
 ) vc on true
 where l.status = 'live' and l.deleted_at is null
-  and c.deleted_at is null;
+  and l.visibility = 'public'
+  and c.deleted_at is null and c.visibility = 'public';
 revoke all on public.live_feed from public;
 -- A dedicated limited runtime role must be provisioned by the operator.
 -- Grant it SELECT on this view only; do not expose the migration-owner connection to Vercel.
