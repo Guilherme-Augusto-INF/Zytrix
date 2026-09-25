@@ -1,3 +1,4 @@
+import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { executePlatform, ApiError } from '../server/neon/platform.mjs';
@@ -88,4 +89,12 @@ test('invalid staging config fails closed', async () => {
   assert.equal(subscribed,0);
   assert.equal(errored,1);
   stop();
+});
+
+test('all four public listing screens share the guarded live feed adapter', async () => {
+  for (const page of ['home','ao-vivo','categoria','explorar']) {
+    const source=await readFile(new URL('../assets/js/'+page+'.js',import.meta.url),'utf8');
+    assert.match(source,/watchPublicLiveFeed\(/,page);
+    assert.match(source,/subscribeFirebase:/,page);
+  }
 });

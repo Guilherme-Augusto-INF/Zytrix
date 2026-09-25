@@ -17,14 +17,14 @@ API is deliberately not substituted globally until all operations are covered.
   parameterized SQL, atomic ledger/alert writes and idempotent retries.
 - Private staging role with table/column grants, never migration-owner credentials.
 - Anonymous read-only `live.feed` action uses `public.live_feed` view; rejects arbitrary filters and excludes hidden/non-public lives at the SQL view.
-- Home, Ao Vivo and Categoria public feed readers are conditionally migrated via the shared `watchPublicLiveFeed` adapter. They query `/api/v1/config` first: staging=true reads only PostgreSQL (polling every 15s); staging=false keeps existing Firestore subscriptions. On staging API errors they fail closed without silently mixing databases. Personalization/followed categories in those screens still use Firebase.
+- Home, Ao Vivo, Categoria and Explorar public feed readers are conditionally migrated via the shared `watchPublicLiveFeed` adapter. They query `/api/v1/config` first: staging=true reads only PostgreSQL (polling every 15s); staging=false keeps existing Firestore subscriptions. On staging API errors they fail closed without silently mixing databases. Personalization/followed categories in those screens still use Firebase.
 - The local isolated staging validation page now tests the PostgreSQL public feed anonymously.
 - Integration fixtures always rolled back. Eight scenario groups passed with the
   restricted runtime role. Real browser sign-in verification remains pending.
 
 ## Not yet migrated
 
-- Remaining frontend document/query/subscription and transaction contracts across all 38 modules; 3 public live listing screens now have a staging-only read adapter (NOT a full cutover).
+- Remaining frontend document/query/subscription and transaction contracts across all 38 modules; 4 public live listing screens now have a staging-only read adapter (NOT a full cutover).
 - Account bootstrap/deletion and profile recovery flow; never automatically recreate
   the manually deleted profile or write Firebase production accounts from staging tests.
 - Channel/live creation and settings, schedules, channel bios/social links, creator codes,
@@ -54,3 +54,5 @@ The owner needs membership in the restricted role solely to exercise SET LOCAL R
 inside the fixture transaction; the runtime role never inherits the owner.
 
 Firebase token verification reference: https://firebase.google.com/docs/auth/admin/verify-id-tokens
+
+Explorar stage mode uses Neon only for its **public live feed**. User personalization, clips and schedules are still Firestore until their respective backend endpoints are migrated. This separation is intentional and must be addressed before production cutover.

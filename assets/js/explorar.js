@@ -14,6 +14,7 @@ import {
   selectStream
 } from './firebase.js';
 import { header, footer, liveCard, categories, icons, escapeHtml, escapeAttr } from './ui.js';
+import { watchPublicLiveFeed } from './live-feed-source.js';
 import {
   getPlatformPreferences,
   watchFollowedCategories,
@@ -132,8 +133,13 @@ function render() {
   const following = ranked.filter(item => followingStreamers.has(item.streamerUid));
   const rising = [...ranked].sort((a,b) => Number(b.viewerCount || 0) - Number(a.viewerCount || 0)).slice(0,8);
   const starting = [...ranked].sort((a,b) => {
-    const aTime = a.startedAt?.toDate?.()?.getTime?.() || 0;
-    const bTime = b.startedAt?.toDate?.()?.getTime?.() || 0;
+    const toMillis = item => {
+      const raw = item.startedAt ?? item.createdAt;
+      const date = raw?.toDate?.() ?? new Date(raw || 0);
+      return Number.isFinite(date.getTime()) ? date.getTime() : 0;
+    };
+    const aTime = toMillis(a);
+    const bTime = toMillis(b);
     return bTime - aTime;
   }).slice(0,8);
 
@@ -203,11 +209,24 @@ function bindControls() {
 
 async function initializeLives() {
   stopLive?.();
-  stopLive = onSnapshot(query(collection(db, 'streams'), where('status', '==', 'live')), async snap => {
-    const base = snap.docs.map(item => ({ id: item.id, ...item.data(), viewerCount: Math.max(0, Number(item.data().viewerCount || 0)) }));
-    lives = await hydrateLives(base);
-    render();
-  }, () => { root.innerHTML = '<div class="state">Não foi possível carregar a descoberta.</div>'; });
+  stopLive = watchPublicLiveFeed({
+    subscribeFirebase: (next, error) => onSnapshot(
+      query(collection(db, 'streams'), where('status', '==', 'live')),
+      async snap => {
+        try {
+          const base = snap.docs.map(item => ({
+            id: item.id, ...item.data(), viewerCount: Math.max(0, Number(item.data().viewerCount || 0))
+          }));
+          next(await hydrateLives(base));
+        } catch (cause) { error(cause); }
+      }, error
+    ),
+    onData: items => { lives = items; render(); },
+    onError: () => {
+      lives = [];
+      root.innerHTML = '<div class="state">Não foi possível carregar a descoberta.</div>';
+    }
+  });
 }
 
 onAuthStateChanged(auth, async current => {
