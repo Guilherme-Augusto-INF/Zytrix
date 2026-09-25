@@ -24,6 +24,13 @@ Produção: `zytrix-lives.vercel.app` corresponde ao projeto Vercel `zytrix-web`
 - A view `public.live_feed` foi criada e consultada; retornou 0 transmissões antes de importar dados.
 - **Esses resultados verificam a estrutura, não a migração dos dados reais nem as políticas de autorização.**
 
+## Preflight real mais recente (dados agregados, sem dados pessoais)
+- Exportação local: **22 usuários Auth** e **295 documentos Firestore**; 23 documentos de usuários, 22 perfis e 8 carteiras.
+- Auth: **1 documento de usuário sem identidade**, **1 perfil sem identidade**; determinar se ambos pertencem ao mesmo UID antes de qualquer decisão. Nenhum e-mail duplicado. **1 identidade válida sem perfil**.
+- Firestore: **1 conflito de nome de usuário normalizado**; averiguar se envolve o perfil órfão. Não renomear silenciosamente.
+- **14 contas sem carteira**: inspecionar esquema de criação sob demanda; apenas criar saldo inicial zero para contas verificadas, jamais inventar saldo histórico. Revisar separadamente carteira e dependências da identidade órfã.
+- Importação permanece **BLOQUEADA** até classificação e remediação verificadas. Não eliminar usuário/perfil órfão nem alterar dados de origem sem análise.
+
 ## Comandos para operador AUTORIZADO em máquina privada (NUNCA executar em CI público)
 ```bash
 cd scripts/firebase-to-neon
