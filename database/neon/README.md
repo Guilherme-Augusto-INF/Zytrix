@@ -1,5 +1,25 @@
 # Zytrix → Neon PostgreSQL — migração do banco (ainda NÃO concluída)
 
+## Atualização verificada — staging
+
+A carga do snapshot foi concluída exclusivamente na branch Neon staging:
+328 registros em 17 tabelas, 52 tabelas de esquema, reconciliação de contagens,
+campos importados e saldos PASS. Órfãos e alertas sem expiração foram preservados
+em quarentena local; as alterações de username foram autorizadas pelo usuário.
+O histórico abaixo registra o diagnóstico anterior à remediação, não o estado atual.
+
+A migração da **aplicação** ainda está em andamento. A API autenticada inicial,
+os testes de permissões e a página local isolada estão descritos em
+[APPLICATION-MIGRATION.md](APPLICATION-MIGRATION.md). Os módulos originais ainda
+não foram conectados globalmente ao novo backend. Não desativar Firestore nem
+promover este trabalho para produção.
+
+O importador agora valida o endpoint exato do staging, usa `--dry-run` (rollback)
+por padrão e exige `--commit-staging` para gravar. Prefira o caminho de arquivo
+privado em `NEON_DATABASE_URL_FILE`; nunca cole uma URL com senha no terminal
+como comando, no chat ou no Git. O helper `save-staging-connection.mjs` fornece
+entrada oculta para salvar a URL somente na pasta privada local.
+
 ## Ambiente verificado
 Produção: `zytrix-lives.vercel.app` corresponde ao projeto Vercel `zytrix-web`, integrado ao repositório **Guilherme-Augusto-INF/Zytrix**, branch `main`. O repositório `Zytrix-tcc` é outro projeto e NÃO é a origem da URL oficial. Todas as alterações deste plano estão isoladas em `feat/neon-postgresql-migration`, sem alterar a produção.
 

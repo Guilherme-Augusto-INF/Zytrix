@@ -2,13 +2,14 @@ import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import pg from 'pg';
 import { readJsonLines, sha256, writeJson } from './lib.mjs';
+import { validateStagingUrl } from './staging-target.mjs';
 
 const [directoryArg, reportArg] = process.argv.slice(2);
 if (!directoryArg || !reportArg) throw new Error('Usage: node reconcile.mjs <normalized-directory> <report.json>');
-if (!process.env.NEON_DATABASE_URL) throw new Error('NEON_DATABASE_URL is required');
+const connection = process.env.NEON_DATABASE_URL_FILE ? (await readFile(process.env.NEON_DATABASE_URL_FILE, 'utf8')).trim() : process.env.NEON_DATABASE_URL;
 const directory = resolve(directoryArg);
 const files = (await readdir(directory)).filter(file => file.endsWith('.jsonl')).sort();
-const client = new pg.Client({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: true } });
+const client = new pg.Client({ connectionString: validateStagingUrl(connection), ssl: { rejectUnauthorized: true } });
 const privateTables = new Set(['firebase_user_map', 'channel_private_data']);
 await client.connect();
 const tables = {};

@@ -4,6 +4,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -38,7 +39,7 @@ test('transform is deterministic and deduplicates two-sided follows', async () =
   ];
   await writeFile(source, `${rows.map(row => JSON.stringify(row)).join('\n')}\n`);
   await writeFile(authMap, JSON.stringify({ alice: '11111111-1111-4111-8111-111111111111', bob: '22222222-2222-4222-8222-222222222222' }));
-  await run(process.execPath, [new URL('../transform.mjs', import.meta.url).pathname, source, authMap, normalized]);
+  await run(process.execPath, [fileURLToPath(new URL('../transform.mjs', import.meta.url)), source, authMap, normalized]);
   const follows = (await readFile(join(normalized, 'follows.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse);
   const options = (await readFile(join(normalized, 'poll_options.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse);
   const votes = (await readFile(join(normalized, 'poll_votes.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse);
@@ -68,7 +69,7 @@ test('Auth preflight detects provider shape and complete identity relations', as
     { localId: 'alice', email: 'alice@example.test', passwordHash: 'hash' },
     { localId: 'bob', email: 'bob@example.test', providerUserInfo: [{ providerId: 'google.com' }] }
   ] }));
-  await run(process.execPath, [new URL('../preflight-auth.mjs', import.meta.url).pathname, source, auth, reportFile]);
+  await run(process.execPath, [fileURLToPath(new URL('../preflight-auth.mjs', import.meta.url)), source, auth, reportFile]);
   const report = JSON.parse(await readFile(reportFile, 'utf8'));
   assert.deepEqual(report.counts, { authUsers: 2, userDocuments: 2, profileDocuments: 2, walletDocuments: 2 });
   assert.equal(report.providerShape.passwordOnly, 1);

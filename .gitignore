@@ -8,6 +8,13 @@ node_modules/
 migration-data/
 private_exports/
 *-service-account.json
+firebase-key.json*
+auth.json
+auth-map.json
+firestore.jsonl
+normalized/
+Zytrix-Export-Privado/
+*.connection
 
 # Never commit Firebase service credentials and private migration exports
 firebase-key.json

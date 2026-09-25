@@ -12,9 +12,9 @@ class Parser(HTMLParser):
   if tag in ['a','script','link']:
    ref=a.get('href',a.get('src',''))
    if ref:self.refs.append(ref)
-errors=[];routes={i['source']:i['destination'] for i in json.loads((root/'vercel.json').read_text())['rewrites']}
+errors=[];routes={i['source']:i['destination'] for i in json.loads((root/'vercel.json').read_text(encoding='utf-8'))['rewrites']}
 for slug in ['termos','privacidade','diretrizes-da-comunidade','denuncias-e-moderacao','conteudo-proibido','politicas','denunciar','moderacao']:
- p=root/(slug+'.html');parser=Parser();parser.feed(p.read_text())
+ p=root/(slug+'.html');parser=Parser();parser.feed(p.read_text(encoding='utf-8'))
  if parser.h1!=1:errors.append(f'{slug}: h1')
  if len(parser.ids)!=len(set(parser.ids)):errors.append(f'{slug}: duplicate ids')
  for ref in parser.refs:
