@@ -1,7 +1,9 @@
+import {platformSource,ownPlatform} from './platform-backend.js';
 import {
   db,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   deleteDoc,
   collection,
@@ -72,7 +74,7 @@ export function achievementList(progress = {}) {
   ];
 }
 
-export async function getPlatformPreferences(uid) {
+async function firebase_getPlatformPreferences(uid) {
   if (!uid) return { ...DEFAULT_PLATFORM_PREFERENCES };
   const snap = await getDoc(doc(db, 'users', uid, 'preferences', 'platform'));
   return snap.exists()
@@ -80,7 +82,7 @@ export async function getPlatformPreferences(uid) {
     : { ...DEFAULT_PLATFORM_PREFERENCES };
 }
 
-export function watchPlatformPreferences(uid, callback, onError) {
+function firebase_watchPlatformPreferences(uid, callback, onError) {
   if (!uid) {
     callback({ ...DEFAULT_PLATFORM_PREFERENCES });
     return () => {};
@@ -94,7 +96,7 @@ export function watchPlatformPreferences(uid, callback, onError) {
   );
 }
 
-export async function savePlatformPreferences(uid, patch = {}) {
+async function firebase_savePlatformPreferences(uid, patch = {}) {
   if (!uid) throw new Error('auth-required');
   const allowed = {
     hideMatureContent: Boolean(patch.hideMatureContent),
@@ -158,7 +160,7 @@ export function watchProgress(uid, callback, onError) {
   }, onError);
 }
 
-export async function setCategoryFollow(uid, categoryId, following) {
+async function firebase_setCategoryFollow(uid, categoryId, following) {
   if (!uid || !categoryId) throw new Error('invalid-category-follow');
   const ref = doc(db, 'users', uid, 'followedCategories', categoryId);
   if (!following) {
@@ -172,7 +174,7 @@ export async function setCategoryFollow(uid, categoryId, following) {
   });
 }
 
-export function watchFollowedCategories(uid, callback, onError) {
+function firebase_watchFollowedCategories(uid, callback, onError) {
   if (!uid) {
     callback(new Set());
     return () => {};
@@ -232,4 +234,35 @@ export function relativeDate(timestamp) {
   if (delta < 3600000) return `há ${Math.floor(delta / 60000)} min`;
   if (delta < 86400000) return `há ${Math.floor(delta / 3600000)} h`;
   return `há ${Math.floor(delta / 86400000)} d`;
+}
+
+export async function getPlatformPreferences(uid) {
+  if(!uid)return {...DEFAULT_PLATFORM_PREFERENCES};
+  return platformSource.run(async()=> (await ownPlatform(uid,'preferences.get')).preferences,()=>firebase_getPlatformPreferences(uid));
+}
+export function watchPlatformPreferences(uid,callback,onError) {
+  if(!uid){callback({...DEFAULT_PLATFORM_PREFERENCES});return ()=>{};}
+  return platformSource.watch({neon:async()=> (await ownPlatform(uid,'preferences.get')).preferences,
+    firebase:(next,error)=>firebase_watchPlatformPreferences(uid,next,error),onData:callback,onError});
+}
+export async function savePlatformPreferences(uid,patch={}) {
+  return platformSource.run(()=>ownPlatform(uid,'preferences.update',{
+    hideMatureContent:!!patch.hideMatureContent,safeMode:!!patch.safeMode,
+    allowReactions:patch.allowReactions!==false,compactAlerts:!!patch.compactAlerts
+  }),()=>firebase_savePlatformPreferences(uid,patch));
+}
+export async function setCategoryFollow(uid,categoryId,following) {
+  return platformSource.run(()=>ownPlatform(uid,'categories.follow',{categoryId,following}),()=>firebase_setCategoryFollow(uid,categoryId,following));
+}
+export function watchFollowedCategories(uid,callback,onError) {
+  if(!uid){callback(new Set());return ()=>{};}
+  return platformSource.watch({neon:async()=>new Set((await ownPlatform(uid,'categories.followed')).categories),
+    firebase:(next,error)=>firebase_watchFollowedCategories(uid,next,error),onData:callback,onError});
+}
+export async function getDiscoveryContext(uid) {
+  return platformSource.run(()=>ownPlatform(uid,'discovery.context'),async()=>{
+    const [following,history]=await Promise.all([getDocs(collection(db,'users',uid,'following')),getDocs(collection(db,'users',uid,'watchHistory'))]);
+    return {following:following.docs.map(d=>d.id),history:history.docs.map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>(b.watchedAt?.seconds??0)-(a.watchedAt?.seconds??0)).slice(0,50)};
+  });
 }

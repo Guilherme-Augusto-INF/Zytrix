@@ -14,8 +14,10 @@ import {
   selectStream
 } from './firebase.js';
 import { header, footer, liveCard, categories, icons, escapeHtml, escapeAttr } from './ui.js';
+import { watchPublicLiveFeed } from './live-feed-source.js';
 import {
   getPlatformPreferences,
+  getDiscoveryContext,
   watchFollowedCategories,
   setCategoryFollow,
   recommendationScore,
@@ -57,12 +59,9 @@ async function loadUserContext() {
     return;
   }
   preferences = await getPlatformPreferences(user.uid).catch(() => preferences);
-  const [followingSnap, historySnap] = await Promise.all([
-    getDocs(collection(db, 'users', user.uid, 'following')).catch(() => null),
-    getDocs(collection(db, 'users', user.uid, 'watchHistory')).catch(() => null)
-  ]);
-  followingStreamers = new Set(followingSnap?.docs?.map(item => item.id) || []);
-  recentStreamers = new Set((historySnap?.docs || []).sort((a,b) => (b.data().watchedAt?.seconds || 0) - (a.data().watchedAt?.seconds || 0)).slice(0,10).map(item => item.data().streamerUid || '').filter(Boolean));
+  const context = await getDiscoveryContext(user.uid).catch(() => ({following:[],history:[]}));
+  followingStreamers = new Set(context.following);
+  recentStreamers = new Set(context.history.slice(0,12).map(item => item.streamerUid).filter(Boolean));
   stopCategories = watchFollowedCategories(user.uid, set => {
     followedCategories = set;
     render();
@@ -132,8 +131,13 @@ function render() {
   const following = ranked.filter(item => followingStreamers.has(item.streamerUid));
   const rising = [...ranked].sort((a,b) => Number(b.viewerCount || 0) - Number(a.viewerCount || 0)).slice(0,8);
   const starting = [...ranked].sort((a,b) => {
-    const aTime = a.startedAt?.toDate?.()?.getTime?.() || 0;
-    const bTime = b.startedAt?.toDate?.()?.getTime?.() || 0;
+    const toMillis = item => {
+      const raw = item.startedAt ?? item.createdAt;
+      const date = raw?.toDate?.() ?? new Date(raw || 0);
+      return Number.isFinite(date.getTime()) ? date.getTime() : 0;
+    };
+    const aTime = toMillis(a);
+    const bTime = toMillis(b);
     return bTime - aTime;
   }).slice(0,8);
 
@@ -203,11 +207,24 @@ function bindControls() {
 
 async function initializeLives() {
   stopLive?.();
-  stopLive = onSnapshot(query(collection(db, 'streams'), where('status', '==', 'live')), async snap => {
-    const base = snap.docs.map(item => ({ id: item.id, ...item.data(), viewerCount: Math.max(0, Number(item.data().viewerCount || 0)) }));
-    lives = await hydrateLives(base);
-    render();
-  }, () => { root.innerHTML = '<div class="state">Não foi possível carregar a descoberta.</div>'; });
+  stopLive = watchPublicLiveFeed({
+    subscribeFirebase: (next, error) => onSnapshot(
+      query(collection(db, 'streams'), where('status', '==', 'live')),
+      async snap => {
+        try {
+          const base = snap.docs.map(item => ({
+            id: item.id, ...item.data(), viewerCount: Math.max(0, Number(item.data().viewerCount || 0))
+          }));
+          next(await hydrateLives(base));
+        } catch (cause) { error(cause); }
+      }, error
+    ),
+    onData: items => { lives = items; render(); },
+    onError: () => {
+      lives = [];
+      root.innerHTML = '<div class="state">Não foi possível carregar a descoberta.</div>';
+    }
+  });
 }
 
 onAuthStateChanged(auth, async current => {
