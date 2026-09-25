@@ -3,3 +3,8 @@ node_modules/
 .vercel/
 *-debug.log
 .env*
+
+# Migração: jamais versionar exportações de dados pessoais
+migration-data/
+private_exports/
+*-service-account.json

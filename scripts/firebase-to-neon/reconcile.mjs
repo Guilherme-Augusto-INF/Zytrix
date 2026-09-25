@@ -24,6 +24,21 @@ try {
     if (status === 'FAIL') passed = false;
     tables[table] = { expectedRows, actualRows, status, normalizedSha256: sha256(await readFile(resolve(directory, file))) };
   }
+  // Money rows require per-wallet comparison; aggregate row counts cannot detect corruption.
+  if (files.includes('wallets.jsonl')) {
+    const expected = await readJsonLines(resolve(directory,'wallets.jsonl'));
+    const actual = await client.query('select user_id::text,balance::text,total_sent::text,total_received::text from public.wallets');
+    const got = new Map(actual.rows.map(w => [w.user_id,w]));
+    const differences = expected.filter(w => {
+      const entry=got.get(w.user_id);
+      return !entry || BigInt(entry.balance)!==BigInt(w.balance)
+        || BigInt(entry.total_sent)!==BigInt(w.total_sent)
+        || BigInt(entry.total_received)!==BigInt(w.total_received);
+    });
+    tables.wallet_values = { expectedRows: expected.length, checked: expected.length,
+      mismatchCount: differences.length, status: differences.length ? 'FAIL' : 'PASS' };
+    if (differences.length) passed=false;
+  }
   const invariants = {};
   const checks = {
     orphanLives: 'select count(*)::bigint as count from public.lives l left join public.channels c on c.id=l.channel_id where c.id is null',

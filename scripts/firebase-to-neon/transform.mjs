@@ -135,3 +135,4 @@ for (const [table, tableRows] of out) {
 }
 await writeJson(resolve(output, 'manifest.json'), manifest);
 process.stdout.write(`${JSON.stringify({ output, tables: Object.keys(manifest.tables).length, unknownPaths: unknownPaths.length })}\n`);
+if (unknownPaths.length) process.exitCode = 2;

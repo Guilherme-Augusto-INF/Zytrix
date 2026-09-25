@@ -1,7 +1,7 @@
-import { readdir } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import pg from 'pg';
-import { readJsonLines } from './lib.mjs';
+import { readJsonLines, sha256 } from './lib.mjs';
 
 const directory = resolve(process.argv[2] ?? '');
 if (!process.argv[2]) throw new Error('Usage: node import-postgres.mjs <normalized-directory>');
@@ -19,9 +19,28 @@ const order = [
 ];
 const existing = new Set((await readdir(directory)).filter(file => file.endsWith('.jsonl')).map(file => file.slice(0, -6)));
 const privateTables = new Set(['firebase_user_map', 'channel_private_data']);
+const manifest = JSON.parse(await readFile(resolve(directory, 'manifest.json'), 'utf8'));
+if (!Array.isArray(manifest.unknownPaths) || manifest.unknownPaths.length)
+  throw new Error('Unmapped Firestore collections: migration import blocked');
+if (!existing.has('identities') || !existing.has('firebase_user_map'))
+  throw new Error('Missing exported Firebase identities or identity map');
+for (const [table, data] of Object.entries(manifest.tables || {})) {
+  if (!existing.has(table)) throw new Error('Missing normalized file for: ' + table);
+  const raw=await readFile(resolve(directory, table + '.jsonl'));
+  if (sha256(raw) !== data.sha256) throw new Error('Normalized data checksum mismatch: ' + table);
+  if ((await readJsonLines(resolve(directory, table + '.jsonl'))).length !== data.rows)
+    throw new Error('Normalized data row-count mismatch: ' + table);
+}
+const identities = await readJsonLines(resolve(directory,'identities.jsonl'));
+const mappings = await readJsonLines(resolve(directory,'firebase_user_map.jsonl'));
+if (identities.length !== mappings.length || !identities.length)
+  throw new Error('Identity count mismatch/empty export');
 const unknown = [...existing].filter(table => !order.includes(table) && !privateTables.has(table));
 if (unknown.length) throw new Error(`No reviewed import order for: ${unknown.join(', ')}`);
 
+const settings = new URL(process.env.NEON_DATABASE_URL);
+if (settings.searchParams.get('sslmode') === 'no-verify' || settings.searchParams.get('sslmode') === 'disable')
+  throw new Error('TLS certificate validation is required');
 const client = new pg.Client({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: true } });
 await client.connect();
 try {

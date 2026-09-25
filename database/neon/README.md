@@ -14,7 +14,8 @@ Produção: `zytrix-lives.vercel.app` corresponde ao projeto Vercel `zytrix-web`
 - [ ] Executar esquema apenas no Neon STAGING e testar constraints/índices, locks e permissões.
 - [ ] Executar exportação privada Auth/Firestore e preflights. Verificar Storage antes do corte.
 - [ ] Resolver anomalias (identidades órfãs, campos desconhecidos, relacionamentos). Importar para banco staging vazio e reconciliar contagens/checksums e saldo de cada carteira.
-- [ ] Criar API backend autorizada, migrar TODAS as leituras/escritas da plataforma para PostgreSQL, projetar realtime/chat e remover Firestore do cliente.
+- [x] Adicionar API piloto somente de leitura para a lista pública de lives, protegida por `NEON_READ_API_ENABLED=true` e credenciais runtime Neon limitadas. A API permanece desativada sem conexão configurada.
+- [ ] Implementar endpoints backend autenticados/autorizados restantes; migrar TODAS as leituras/escritas da plataforma para PostgreSQL, projetar realtime/chat e remover Firestore do cliente.
 - [ ] Testar regressão, segurança, idempotência, carga, rollback e troca de banco. Reconciliar novamente após janela final.
 - [ ] Aprovar promoção produção somente após evidências de PASS. Não fazer deploy automático a partir desta branch.
 
@@ -33,7 +34,7 @@ node transform.mjs /caminho/PRIVADO/zytrix/firestore.jsonl /caminho/PRIVADO/zytr
 # Revise normalized/manifest.json e unknownPaths antes de seguir.
 ```
 
-Em Neon STAGING (role apenas para migração) execute `database/neon/001_foundation.sql` **uma única vez num banco vazio**. Importação e reconciliação somente depois de verificar SQL e transformar dados.
+Em Neon STAGING (role apenas para migração) execute `database/neon/001_foundation.sql`, depois `database/neon/002_public_feed.sql` **uma única vez num banco vazio**. Configure uma role separada `zytrix_runtime` com permissão de leitura apenas sobre `public.live_feed` e forneça a Vercel uma URL Neon dessa role. Nunca forneça a credencial do usuário que executou as migrações à API. Importação e reconciliação somente depois de verificar SQL e transformar dados.
 
 ```bash
 export NEON_DATABASE_URL='postgresql://...-staging...?...'  # credencial apenas no servidor, NUNCA Git
@@ -45,6 +46,7 @@ O importador usa uma transação e não ignora conflitos. TLS deve verificar cer
 
 ## Segurança e consistência
 - Banco privado Neon, API server-side, credenciais `NEON_DATABASE_URL` fora do navegador e de logs.
+- No Vercel Preview, `NEON_READ_API_ENABLED=true` permite apenas GET `/api/v1/health` e GET `/api/v1/lives`. Na produção mantenha `NEON_READ_API_ENABLED=false` até o corte revisado.
 - **Não conceder** acesso à rede pública ao banco além das políticas do provedor nem acesso SQL aos visitantes. Usar credenciais de runtime mínimas e pool.
 - Toda regra de segurança do Firestore deve ser convertida em autorização backend. Este esquema por si só NÃO a implementa.
 - Dados pessoais de Auth, exportações, URLs de conexão e service accounts nunca entram no repositório, artefatos públicos ou previews.

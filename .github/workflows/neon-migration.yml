@@ -1,0 +1,24 @@
+name: Neon Migration Checks
+on:
+  pull_request:
+    branches: [main]
+    paths: ['database/neon/**', 'scripts/firebase-to-neon/**', 'tests/neon-migration-static.test.mjs', 'server/neon/**', 'api/v1/**', 'package*.json', '.github/workflows/neon-migration.yml']
+  push:
+    branches: ['feat/neon-postgresql-migration']
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: node --check server/neon/pool.mjs && node --check api/v1/lives.js && node --check api/v1/health.js
+      - run: npm ci --prefix scripts/firebase-to-neon
+      - run: npm run test:migration
+      - run: node --check scripts/firebase-to-neon/export-auth.mjs && node --check scripts/firebase-to-neon/export-firestore.mjs
