@@ -157,7 +157,7 @@ jobs:
               errors.append('robots.txt não libera rastreamento geral')
           if f'Sitemap: {base}/sitemap.xml' not in robots:
               errors.append('robots.txt não aponta para sitemap.xml')
-          if 'Disallow: /' in robots:
+          if re.search(r'^\s*Disallow:\s*/\s*$', robots, re.I | re.M):
               errors.append('robots.txt bloqueia o site inteiro')
 
           tree = ET.parse('sitemap.xml')
