@@ -7,7 +7,7 @@ export function resolveSafePreviewPath(root, pathname) {
   if (typeof pathname !== 'string') return null;
   let decoded;
   try { decoded = decodeURIComponent(pathname); } catch { return null; }
-  if (!decoded.startsWith('/') || decoded.includes('\\') || decoded.includes('\\0')
+  if (!decoded.startsWith('/') || decoded.includes('\\') || decoded.includes(String.fromCharCode(0)) || decoded.includes('%')
       || decoded.includes('//')) return null;
   if (decoded === '/') decoded = '/staging-validation.html';
   if (decoded === '/staging-validation.html') return resolve(root,'staging-validation.html');
