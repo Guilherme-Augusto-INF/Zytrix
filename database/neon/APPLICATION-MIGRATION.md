@@ -56,3 +56,5 @@ inside the fixture transaction; the runtime role never inherits the owner.
 Firebase token verification reference: https://firebase.google.com/docs/auth/admin/verify-id-tokens
 
 Explorar stage mode uses Neon only for its **public live feed**. User personalization, clips and schedules are still Firestore until their respective backend endpoints are migrated. This separation is intentional and must be addressed before production cutover.
+
+The isolated `staging-validation.html` now offers an optional profile recovery form **only** after a real authenticated read detects an account without a profile and Firebase reports a verified email. Submission requires an explicit checkbox; ordinary login and verification remain read-only. Apply `005_staging_profile_recovery_grant.sql` on the verified staging branch (user reported completing this on 2026-09-25; independently verify grants and run the rolled-back staging integration test before accepting it). This staging-only form must not be used for production recovery until full cutover.

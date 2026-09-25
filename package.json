@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "python3 scripts/build-policies.py",
-    "test": "node --test tests/report-model.test.mjs tests/security-utils.test.mjs tests/profile-render.test.mjs tests/streaming.test.mjs tests/auth-csp.test.mjs tests/neon-migration-static.test.mjs tests/platform-service.test.mjs tests/live-feed-migration.test.mjs tests/staging-preview-path.test.mjs",
+    "test": "node --test tests/report-model.test.mjs tests/security-utils.test.mjs tests/profile-render.test.mjs tests/streaming.test.mjs tests/auth-csp.test.mjs tests/neon-migration-static.test.mjs tests/platform-service.test.mjs tests/live-feed-migration.test.mjs tests/staging-preview-path.test.mjs tests/staging-recovery.test.mjs",
     "check": "python3 scripts/check-site.py",
     "test:rules": "firebase emulators:exec --project demo-zytrix-governance --only firestore 'node --test --test-concurrency=1 tests/firestore.rules.test.mjs tests/platform-expansion.rules.test.mjs tests/security-hardening.rules.test.mjs'",
     "test:migration": "npm test --prefix scripts/firebase-to-neon"
