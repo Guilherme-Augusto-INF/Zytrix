@@ -39,6 +39,19 @@ async function canModerate(c, user, row) {
 export async function executePlatform(c, identity, action, data = {}) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) fail('invalid_input');
   switch (action) {
+    case 'live.feed': {
+      // Public feed is deliberately sourced from the restricted SQL view.
+      // No identity lookup, no raw table access and no arbitrary client filters.
+      if (Object.keys(data).length) fail('invalid_input');
+      const result=await c.query(`select firebase_id as "id", streamer_uid as "streamerUid",
+        channel_id as "channelId", title, description, category_id as "categoryId",
+        thumbnail_url as "thumbnailURL", playback_url as "playbackURL",
+        mature_content as "matureContent", created_at as "createdAt",
+        viewer_count as "viewerCount", username, photo_url as "photoURL"
+        from public.live_feed
+        order by viewer_count desc, created_at desc, postgres_id limit 80`);
+      return {lives: result.rows};
+    }
     case 'live.get': {
       const u=identity?await actor(c,identity):null;const l=await live(c,data.liveId,u);
       const owner=(await c.query('select firebase_uid from public.identities where id=$1',[l.owner_id])).rows[0];

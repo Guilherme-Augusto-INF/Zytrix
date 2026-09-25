@@ -11,6 +11,7 @@ import {
   selectStream
 } from './firebase.js';
 import { header, footer, liveCard, categories, icons, escapeHtml } from './ui.js';
+import { watchPublicLiveFeed } from './live-feed-source.js';
 import {
   getPlatformPreferences,
   watchFollowedCategories,
@@ -119,14 +120,28 @@ function bindCards() {
 
 function startLives() {
   stopLive?.();
-  stopLive = onSnapshot(query(collection(db, 'streams'), where('status', '==', 'live')), async snap => {
-    const base = snap.docs.map(d => ({ id: d.id, ...d.data(), viewerCount: Math.max(0, Number(d.data().viewerCount || 0)) }));
-    lives = await Promise.all(base.map(async item => {
-      const p = await getProfile(item.streamerUid).catch(() => null);
-      return { ...item, username: p?.username || 'Streamer', photoURL: p?.photoURL || '' };
-    }));
-    renderLives();
-  }, () => { featured.innerHTML = '<div class="state">Não foi possível carregar as lives.</div>'; });
+  stopLive = watchPublicLiveFeed({
+    subscribeFirebase: (next, error) => onSnapshot(
+      query(collection(db, 'streams'), where('status', '==', 'live')),
+      async snap => {
+        try {
+          const base = snap.docs.map(d => ({ id: d.id, ...d.data(), viewerCount: Math.max(0, Number(d.data().viewerCount || 0)) }));
+          const hydrated = await Promise.all(base.map(async item => {
+            const p = await getProfile(item.streamerUid).catch(() => null);
+            return { ...item, username: p?.username || 'Streamer', photoURL: p?.photoURL || '' };
+          }));
+          next(hydrated);
+        } catch (e) { error(e); }
+      }, error
+    ),
+    onData: items => { lives = items; renderLives(); },
+    onError: () => {
+      lives = [];
+      renderLives();
+      featured.innerHTML = '<div class="state">Não foi possível carregar as lives.</div>';
+      liveNow.innerHTML = '<div class="state">Transmissões temporariamente indisponíveis.</div>';
+    }
+  });
 }
 
 onAuthStateChanged(auth, async current => {

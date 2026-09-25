@@ -3,5 +3,6 @@
 <p id="status" role="status">Verificando ambiente…</p>
 <form id="login" hidden><h2>Entrar com uma conta existente</h2><label>E-mail <input name="email" type="email" autocomplete="username" required></label><label>Senha <input name="password" type="password" autocomplete="current-password" required></label><button>Entrar</button></form>
 <section id="session" hidden><h2>Conferência da conta</h2><p id="account"></p><p id="wallet"></p><button id="refresh" type="button">Conferir novamente</button><button id="logout" type="button">Sair</button></section>
+<section><h2>Feed público PostgreSQL</h2><p id="feed-status" role="status">Consultando PostgreSQL…</p><ul id="feed-list"></ul><button id="refresh-feed" type="button">Atualizar feed</button></section>
 <section><h2>Escopo desta validação</h2><p>Esta página verifica autenticação e leitura privada de perfil e carteira. As demais telas permanecem em migração; não use o site antigo para testar gravações enquanto essa migração não estiver concluída.</p></section>
 </main><script type="module" src="assets/js/staging-validation.js"></script></body></html>

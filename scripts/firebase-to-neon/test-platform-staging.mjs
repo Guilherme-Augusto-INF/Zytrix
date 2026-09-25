@@ -55,10 +55,20 @@ try{
  await executePlatform(client,userA,'follow.set',{channelId:uidB,following:true});
  assert.equal((await client.query('select count(*)::int as n from public.follows where follower_id=$1 and channel_id=$2',[a,channel])).rows[0].n,1);
  await executePlatform(client,userA,'follow.set',{channelId:uidB,following:false});checks.push('following is idempotent');
+
+ // The public view cannot expose private lives, even to anonymous callers.
+ await client.query("insert into public.profiles(user_id,username) values($1,$2)",[b,'staging_'+randomUUID().replaceAll('-','').slice(0,18)]);
+ let feed=await executePlatform(client,null,'live.feed',{});
+ assert.equal(feed.lives.some(row=>row.id===streamId),true);
+ checks.push('anonymous Neon public feed includes visible live');
  if(process.argv.includes('--runtime-role'))await client.query('reset role');
  await client.query("update public.lives set visibility='private' where id=$1",[stream]);
  if(process.argv.includes('--runtime-role'))await client.query('set local role zytrix_staging_app');
  await assert.rejects(executePlatform(client,null,'chat.list',{liveId:streamId}),e=>e.status===404);checks.push('private live denied to anonymous user');
+ feed=await executePlatform(client,null,'live.feed',{});
+ assert.equal(feed.lives.some(row=>row.id===streamId),false);
+ checks.push('anonymous public feed omits private live');
+
  await client.query('rollback');await writeFile(reportFile,JSON.stringify({status:'PASS',checks,fixtures:'ROLLED_BACK'},null,2));
  console.log(JSON.stringify({status:'PASS',checks:checks.length,fixtures:'ROLLED_BACK'}));
 }catch(e){await client.query('rollback').catch(()=>{});const permission=e.code==='42501'&&/^permission denied for (table|schema) [a-z_]+$/.test(e.message)?e.message:undefined;await writeFile(reportFile,JSON.stringify({status:'FAIL',checks,code:e.code??e.name,permission,fixtures:'ROLLED_BACK'},null,2));console.log(JSON.stringify({status:'FAIL',code:e.code??e.name,permission}));process.exitCode=1;}finally{await client.end();}
