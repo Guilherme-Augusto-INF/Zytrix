@@ -9,15 +9,20 @@ Produção: `zytrix-lives.vercel.app` corresponde ao projeto Vercel `zytrix-web`
 - [x] Identificar repositório/deploy oficiais.
 - [x] Adaptar esquema relacional completo do plano anterior; PostgreSQL não depende de `auth.users` do Supabase.
 - [x] Preparar exportação paginada e privada do Firestore, inventário de Auth sem hashes/senhas, UUID determinístico, transformações e importação para Neon staging.
-- [ ] Conectar a conta Neon à sessão do ChatGPT e autorizar criação de **projetos separados de staging e produção**; nenhum banco remoto criado ainda.
+- [x] Integração Neon instalada; projeto existente `soft-water-98807259`, com branches Neon `production` e `staging` (confirmadas pelo usuário). O conector SQL ainda falha por incompatibilidade de schema de argumentos; validação manual no SQL Editor.
 - [ ] Confirmar estado ATUAL do Firebase; em levantamento anterior havia 19 identidades Auth e 20 documentos users/profiles. A diferença é BLOQUEADORA até reconciliar (não excluir documentos automaticamente).
-- [ ] Executar esquema apenas no Neon STAGING e testar constraints/índices, locks e permissões.
+- [x] Usuário executou esquema 001 em Neon `staging`; validação 003 apresentou **52/52 tabelas, 0 ausentes, PASS** (captura de tela de 24/09/2026). Usuário também executou 002 e `SELECT COUNT(*) FROM public.live_feed` retornou **0**, esperado antes da importação. **Pendente:** testes reais de constraints/índices, autenticação e grants com role restrita.
 - [ ] Executar exportação privada Auth/Firestore e preflights. Verificar Storage antes do corte.
 - [ ] Resolver anomalias (identidades órfãs, campos desconhecidos, relacionamentos). Importar para banco staging vazio e reconciliar contagens/checksums e saldo de cada carteira.
 - [x] Adicionar API piloto somente de leitura para a lista pública de lives, protegida por `NEON_READ_API_ENABLED=true` e credenciais runtime Neon limitadas. A API permanece desativada sem conexão configurada.
 - [ ] Implementar endpoints backend autenticados/autorizados restantes; migrar TODAS as leituras/escritas da plataforma para PostgreSQL, projetar realtime/chat e remover Firestore do cliente.
 - [ ] Testar regressão, segurança, idempotência, carga, rollback e troca de banco. Reconciliar novamente após janela final.
 - [ ] Aprovar promoção produção somente após evidências de PASS. Não fazer deploy automático a partir desta branch.
+
+## Evidências de staging (declaradas por capturas enviadas pelo usuário)
+- A validação 003 confirmou `expected_tables=52`, `installed_tables=52`, `missing_tables=0`, `schema_status=PASS`.
+- A view `public.live_feed` foi criada e consultada; retornou 0 transmissões antes de importar dados.
+- **Esses resultados verificam a estrutura, não a migração dos dados reais nem as políticas de autorização.**
 
 ## Comandos para operador AUTORIZADO em máquina privada (NUNCA executar em CI público)
 ```bash
