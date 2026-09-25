@@ -8,7 +8,8 @@ API is deliberately not substituted globally until all operations are covered.
 
 - Firebase ID token signature, expiry, issuer and audience verification using Admin SDK.
 - Fixed staging endpoint and dedicated runtime role; production deployment disabled.
-- Own account, public profile, profile editing and own wallet reads/zero-wallet creation.
+- Own account, public profile, profile editing with server-side seven-day username cooldown and own wallet reads/zero-wallet creation.
+- Explicit, verified owner-only `profile.recover` creates a new chosen profile **only** when none exists; no synthetic history and no automatic account login writes. It requires the additional staging-only column grant in `005_staging_profile_recovery_grant.sql` before executing its integration fixture.
 - Live read/start/end, channel ownership checks and unique viewer heartbeat/leave.
 - Follow/unfollow, preferences, notification read marker, own transaction history.
 - Chat listing/sending/deletion, idempotency, rate limits, follower/member modes,
@@ -25,8 +26,7 @@ API is deliberately not substituted globally until all operations are covered.
 ## Not yet migrated
 
 - Remaining frontend document/query/subscription and transaction contracts across all 38 modules; 4 public live listing screens now have a staging-only read adapter (NOT a full cutover).
-- Account bootstrap/deletion and profile recovery flow; never automatically recreate
-  the manually deleted profile or write Firebase production accounts from staging tests.
+- Account bootstrap/deletion and frontend self-service profile recovery screen; the restricted `profile.recover` API exists but is **not** hooked into the UI or provisioned in staging until 005 is applied. Never automatically recreate the manually deleted profile or write Firebase production accounts from staging tests.
 - Channel/live creation and settings, schedules, channel bios/social links, creator codes,
   channel membership and moderator management.
 - Watch progress/achievements, followed categories, attribution, full notifications.

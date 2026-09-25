@@ -14,11 +14,17 @@ try{
  const a=randomUUID(),b=randomUUID(),uidA='staging-test-'+randomUUID(),uidB='staging-test-'+randomUUID();
  const channel=randomUUID(),stream=randomUUID(),streamId='test-'+randomUUID();
  await client.query('insert into public.identities(id,firebase_uid) values($1,$2),($3,$4)',[a,uidA,b,uidB]);
+ await client.query(`insert into public.user_accounts(user_id,firebase_uid,zytrix_id,email,provider)
+   values($1,$2,$3,$4,'password')`,[a,uidA,'ZY-'+randomUUID().replaceAll('-','').slice(0,12),'test-'+randomUUID()+'@example.invalid']);
  await client.query("insert into public.channels(id,firebase_id,owner_id,name,slug) values($1,$2,$3,'Integration test',$4)",[channel,uidB,b,'test-'+randomUUID()]);
  await client.query("insert into public.lives(id,firebase_id,channel_id,owner_id,title,playback_url,status,started_at) values($1,$2,$3,$4,'Integration test','https://www.twitch.tv/test','live',now())",[stream,streamId,channel,b]);
  await client.query('insert into public.wallets(user_id,balance) values($1,100),($2,0)',[a,b]);
  if(process.argv.includes('--runtime-role'))await client.query('set local role zytrix_staging_app');
  const userA={uid:uidA,emailVerified:true};const userB={uid:uidB,emailVerified:true};
+ const recovered=await executePlatform(client,userA,'profile.recover',{username:'staging_'+randomUUID().replaceAll('-','').slice(0,18),bio:''});
+ assert.equal(recovered.recovered,true);
+ await assert.rejects(executePlatform(client,userA,'profile.recover',{username:'AnotherName'}),e=>e.code==='profile_already_exists');
+ checks.push('explicit, verified profile recovery is single-use');
  const requestKey=randomUUID();
  const first=await executePlatform(client,userA,'support.send',{liveId:streamId,amount:25,requestKey});
  const retry=await executePlatform(client,userA,'support.send',{liveId:streamId,amount:25,requestKey});

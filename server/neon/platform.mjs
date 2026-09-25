@@ -143,15 +143,43 @@ export async function executePlatform(c, identity, action, data = {}) {
         from public.user_accounts a left join public.profiles p on p.user_id=a.user_id where a.user_id=$1`,[u.id]);
       return { account:r.rows[0]??null,admin:u.admin };
     }
+    case 'profile.recover': {
+      // Explicit recovery for the owner of an Auth account without a profile.
+      // Never infer old usernames/bios or create a profile during ordinary login.
+      const u=await actor(c,identity,true);
+      const username=text(data.username,2,30);
+      if (!/^[A-Za-z0-9_.-]+$/.test(username)) fail('invalid_username');
+      const bio=text(data.bio??'',0,500);
+      if ((await c.query('select 1 from private.reserved_usernames where username_key=lower($1)',[username])).rowCount) fail('reserved_username');
+      // Lock this user's identity to serialize concurrent profile recovery.
+      await c.query('select id from public.identities where id=$1 for update',[u.id]);
+      if (!(await c.query('select 1 from public.user_accounts where user_id=$1',[u.id])).rowCount)
+        fail('account_missing',404);
+      if ((await c.query('select 1 from public.profiles where user_id=$1',[u.id])).rowCount)
+        fail('profile_already_exists',409);
+      const created=await c.query(`insert into public.profiles(user_id,firebase_uid,username,bio)
+        values($1,$2,$3,$4) on conflict do nothing returning username,bio`,
+        [u.id,u.firebase_uid,username,bio]);
+      if (!created.rowCount) fail('username_unavailable',409);
+      return {profile:created.rows[0],recovered:true};
+    }
     case 'profile.update': {
       const u=await actor(c,identity,true);
       const username=text(data.username,2,30);
       if (!/^[A-Za-z0-9_.-]+$/.test(username)) fail('invalid_username');
       const bio=text(data.bio??'',0,500);
       if ((await c.query('select 1 from private.reserved_usernames where username_key=lower($1)',[username])).rowCount) fail('reserved_username');
-      const r=await c.query('update public.profiles set username=$2,bio=$3,username_updated_at=case when username<>$2 then now() else username_updated_at end where user_id=$1 returning username,bio',[u.id,username,bio]);
-      if (!r.rowCount) fail('profile_missing',404);
-      return {profile:r.rows[0]};
+      const existing=await c.query('select username from public.profiles where user_id=$1 for update',[u.id]);
+      if (!existing.rowCount) fail('profile_missing',404);
+      if (existing.rows[0].username === username) {
+        const changed=await c.query('update public.profiles set bio=$2 where user_id=$1 returning username,bio',[u.id,bio]);
+        return {profile:changed.rows[0]};
+      }
+      // Apply the seven-day username change cooldown on the server, not in JavaScript.
+      const changed=await c.query(`update public.profiles set username=$2,bio=$3,username_updated_at=now()
+        where user_id=$1 and username_updated_at<=now()-interval '7 days' returning username,bio`,[u.id,username,bio]);
+      if (!changed.rowCount) fail('username_cooldown',409);
+      return {profile:changed.rows[0]};
     }
     case 'wallet.get':
     case 'wallet.ensure': {
