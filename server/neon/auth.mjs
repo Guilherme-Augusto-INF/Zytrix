@@ -12,6 +12,7 @@ export async function authenticate(req) {
     // Signature, expiration, issuer and audience are checked by the Admin SDK.
     const token = await getAuth(app).verifyIdToken(value.slice(7));
     return { uid: token.uid, emailVerified: token.email_verified === true,
-      authTime: token.auth_time, email: token.email ?? null };
+      authTime: token.auth_time,expiresAt:token.exp, email: token.email ?? null,
+      provider:token.firebase?.sign_in_provider==='google.com'?'google':token.firebase?.sign_in_provider==='password'?'password':null };
   } catch { return null; }
 }

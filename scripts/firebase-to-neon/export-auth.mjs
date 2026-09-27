@@ -26,7 +26,7 @@ do {
     const providerName = providers.some(p => p.providerId === 'google.com') ? 'google' : 'password';
     const created = user.metadata.creationTime ? new Date(user.metadata.creationTime).toISOString() : new Date(0).toISOString();
     // Deliberately exclude password hashes, tokens and unneeded personal metadata.
-    users.push({ uid: user.uid, email: user.email || null, emailVerified: !!user.emailVerified,
+    users.push({ uid: user.uid, email: user.email || null, emailVerified: !!user.emailVerified,disabled:!!user.disabled,
       providerUserInfo: providers, password_hash_present: !!user.passwordHash,
       createdAt: created });
     map[user.uid] = { postgres_user_id: id, source_email: user.email || null, source_provider: providerName };

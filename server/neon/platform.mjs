@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
+import { v5 as uuidv5 } from 'uuid';
 import { safeStreamingUrl } from '../../assets/js/security.js';
 import { parseStreamingSource } from '../../assets/js/streaming.js';
 
@@ -9,7 +10,7 @@ const fail = (code, status) => { throw new ApiError(code, status); };
 const text = (v, min, max) => typeof v === 'string' && v.length >= min && v.length <= max ? v : fail('invalid_input');
 const id = value => text(value, 1, 128);
 const key = value => typeof value === 'string' && /^[A-Za-z0-9_-]{16,100}$/.test(value) ? value : fail('invalid_request_key');
-async function actor(c, identity, verified = false) {
+export async function actor(c, identity, verified = false) {
   if (!identity) fail('authentication_required', 401);
   if (verified && !identity.emailVerified) fail('verified_email_required', 403);
   const r = await c.query(`select i.id, i.firebase_uid, exists(select 1 from public.admins a where a.user_id=i.id and a.active) as admin
@@ -41,6 +42,71 @@ async function canModerate(c, user, row) {
 export async function executePlatform(c, identity, action, data = {}) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) fail('invalid_input');
   switch (action) {
+    case 'account.register': {
+      if(!identity)fail('authentication_required',401);
+      if(!identity.emailVerified||!identity.email||!['password','google'].includes(identity.provider))fail('verified_email_required',403);
+      const username=text(data.username,2,30);if(!/^[A-Za-z0-9_.-]+$/.test(username))fail('invalid_username');
+      if(data.acceptPolicies!==true)fail('policy_acceptance_required');
+      const policy=(await c.query('select * from public.governance_config where singleton and terms_effective')).rows[0];
+      if(!policy||data.termsVersion!==policy.terms_version||data.privacyVersion!==policy.privacy_version||data.rulesVersion!==policy.rules_version)fail('policy_version_mismatch',409);
+      await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['register:'+identity.uid]);
+      if((await c.query('select 1 from public.identities where firebase_uid=$1',[identity.uid])).rowCount)fail('account_already_exists',409);
+      if((await c.query('select 1 from private.reserved_usernames where username_key=lower($1)',[username])).rowCount)fail('reserved_username');
+      const userId=uuidv5('firebase-auth:'+identity.uid,uuidv5('zytrix-ca4f2',uuidv5.DNS));
+      await c.query('insert into public.identities(id,firebase_uid) values($1,$2)',[userId,identity.uid]);
+      await c.query('insert into public.user_accounts(user_id,firebase_uid,zytrix_id,email,provider) values($1,$2,$3,$4,$5)',[userId,identity.uid,'ZY-'+userId,identity.email,identity.provider]);
+      await c.query('insert into public.profiles(user_id,firebase_uid,username) values($1,$2,$3)',[userId,identity.uid,username]);
+      for(const [name,version]of [['terms',policy.terms_version],['privacy',policy.privacy_version],['community_guidelines',policy.rules_version],['content_policy',policy.rules_version]])
+        await c.query('insert into public.policy_acceptances(user_id,policy,version) values($1,$2,$3)',[userId,name,version]);
+      return {registered:true};
+    }
+    case 'notifications.list': {
+      const u=await actor(c,identity);
+      const rows=await c.query(`select * from (
+        select 'support' as kind,t.id::text as id,t.created_at as "createdAt",t.amount::text as amount,t.message as title,
+          t.created_at>coalesce((select last_seen_at from public.notification_states where user_id=$1 and state_type='zycoins'),'-infinity') as unread
+          from public.zy_coin_transactions t where t.to_user_id=$1 and t.type='stream_support' and t.status='completed'
+        union all
+        select 'follower',f.follower_id::text,f.followed_at,null,p.username,
+          f.followed_at>coalesce((select last_seen_at from public.notification_states where user_id=$1 and state_type='platform'),'-infinity')
+          from public.follows f join public.channels ch on ch.id=f.channel_id left join public.profiles p on p.user_id=f.follower_id
+          where ch.owner_id=$1 and ch.deleted_at is null
+        union all
+        select 'schedule',s.id::text,s.created_at,null,s.title,
+          s.created_at>coalesce((select last_seen_at from public.notification_states where user_id=$1 and state_type='platform'),'-infinity')
+          from public.live_schedules s join public.follows f on f.channel_id=s.channel_id join public.channels ch on ch.id=s.channel_id
+          where f.follower_id=$1 and ch.visibility='public' and ch.deleted_at is null and s.status='scheduled' and s.starts_at>now()
+        ) n order by "createdAt" desc,kind,id limit 100`,[u.id]);
+      return {notifications:rows.rows};
+    }
+    case 'admin.overview': {
+      const u=await actor(c,identity,true);if(!u.admin)fail('forbidden',403);
+      const row=(await c.query(`select (select count(*)::int from public.identities) as accounts,
+        (select count(*)::int from public.lives where status='live' and deleted_at is null) as lives,
+        (select count(*)::int from public.reports where status='open') as reports,
+        (select count(*)::int from public.zy_coin_orders where status='pending') as "pendingOrders"`)).rows[0];
+      return {overview:row};
+    }
+    case 'admin.penalty': {
+      const u=await actor(c,identity,true);if(!u.admin)fail('forbidden',403);
+      if(!['warning','mute','ban','revoke'].includes(data.kind))fail('invalid_input');
+      const reason=text(data.reason?.trim(),1,500),requestKey='moderation:'+createHash('sha256').update(u.id+':'+key(data.requestKey)).digest('hex');
+      const minutes=data.minutes??null;if(minutes!==null&&(!Number.isInteger(minutes)||minutes<1||minutes>525600))fail('invalid_duration');
+      const target=(await c.query('select id from public.identities where firebase_uid=$1',[id(data.uid)])).rows[0];
+      const actionName=data.kind==='warning'?'warn':data.kind;
+      if(data.kind==='revoke'&&minutes!==null)fail('invalid_duration');
+      if(!target||target.id===u.id||(await c.query('select 1 from public.admins where user_id=$1 and active',[target.id])).rowCount)fail('invalid_target');
+      await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['penalty:'+target.id]);
+      const old=(await c.query('select target_user_id,action,reason,round(extract(epoch from (expires_at-created_at))/60)::int as minutes from public.moderation_actions where firebase_id=$1',[requestKey])).rows[0];
+      if(old){if(old.target_user_id!==target.id||old.action!==actionName||old.reason!==reason||old.minutes!==minutes)fail('request_key_conflict',409);return {updated:true,replayed:true};}
+      if(data.kind==='revoke')await c.query('update public.moderation_penalties set active=false where user_id=$1',[target.id]);
+      else await c.query(`insert into public.moderation_penalties(user_id,type,reason,active,created_by,expires_at)
+        values($1,$2,$3,true,$4,case when $5::int is null then null else now()+$5*interval '1 minute' end)
+        on conflict(user_id) do update set type=$2,reason=$3,active=true,expires_at=excluded.expires_at,updated_at=now()`,[target.id,data.kind,reason,u.id,minutes]);
+      await c.query(`insert into public.moderation_actions(firebase_id,target_user_id,action,penalty_type,reason,moderator_id,expires_at)
+        values($1,$2,$3,$4,$5,$6,case when $7::int is null then null else now()+$7*interval '1 minute' end)`,[requestKey,target.id,actionName,data.kind==='revoke'?'none':data.kind,reason,u.id,minutes]);
+      return {updated:true,replayed:false};
+    }
     case 'categories.list': {
       const r=await c.query('select id,name,parent_id as "parentId" from public.categories where active order by sort_order,name,id limit 500');
       return {categories:r.rows};

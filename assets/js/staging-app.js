@@ -1,3 +1,4 @@
+import {watchRealtime} from './realtime-client.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
 import { createPlatformClient } from './staging-client.js';
@@ -22,7 +23,7 @@ function finish(form){form.append(el('button','Salvar',{type:'submit'}));return 
 function safeLink(url,label){try{const parsed=new URL(url);if(parsed.protocol==='https:'&&!parsed.username&&!parsed.password)return el('a',label,{href:parsed.href,target:'_blank',rel:'noopener noreferrer'});}catch{}return el('span','Endereço indisponível');}
 async function page(name,liveId){dispose();dispose=()=>{};const current=++generation;content.replaceChildren();status.textContent='Carregando…';
  const root=el('div');content.append(root);
- try{if(name==='feed')await feed(root);else if(name==='categories')await categories(root);else if(name==='history')await history(root);else if(name==='account')await account(root);else if(name==='wallet')await wallet(root);else if(name==='creator')await creator(root);else if(name==='live')await watch(root,liveId,current);
+ try{if(name==='feed')await feed(root);else if(name==='notifications')await notifications(root,current);else if(name==='admin')await admin(root);else if(name==='categories')await categories(root);else if(name==='history')await history(root);else if(name==='account')await account(root);else if(name==='wallet')await wallet(root);else if(name==='creator')await creator(root);else if(name==='live')await watch(root,liveId,current);
  if(current===generation)status.textContent='Staging pronto.';}catch(e){if(current===generation)report(e);}
 }
 async function feed(root){const [feed,{preferences}]=await Promise.all([call('lives.list'),call('preferences.get')]);const lives=feed.lives.filter(l=>!l.matureContent||!(preferences.safeMode||preferences.hideMatureContent));root.append(el('h2','Ao vivo'));
@@ -68,10 +69,12 @@ async function watch(root,liveId,current){const {live,permissions,channelId}=awa
  if(permissions.owner){root.append(button(live.status==='live'?'Encerrar live':'Iniciar live',async()=>{await call('live.state',{liveId,status:live.status==='live'?'ended':'live'});await page('live',liveId);}));}
  else root.append(button('Seguir canal',async()=>{await call('follow.set',{channelId,following:true});status.textContent='Canal seguido.';}),button('Deixar de seguir',async()=>{await call('follow.set',{channelId,following:false});status.textContent='Você deixou de seguir o canal.';}));
  const chat=el('section');chat.append(el('h2','Chat'));const list=el('ol');chat.append(list);root.append(chat);
- const refresh=async()=>{const {messages}=await call('chat.list',{liveId});if(current!==generation)return;list.replaceChildren();for(const m of messages){const item=el('li');item.append(el('strong',m.username??'Usuário'),el('span',': '+m.text));if(permissions.moderator||m.uid===auth.currentUser?.uid)item.append(button('Excluir',async()=>{await call('chat.delete',{liveId,messageId:m.id});await refresh();}));list.append(item);}};
+ const renderMessages=messages=>{if(current!==generation)return;list.replaceChildren();for(const m of messages){const item=el('li');item.append(el('strong',m.username??'Usuário'),el('span',': '+m.text));if(permissions.moderator||m.uid===auth.currentUser?.uid)item.append(button('Excluir',async()=>{await call('chat.delete',{liveId,messageId:m.id});await refresh();}));list.append(item);}};
+ const refresh=async()=>renderMessages((await call('chat.list',{liveId})).messages);
  await refresh();if(current!==generation)return;
- let active=true,timer;const poll=async()=>{if(!active)return;try{await refresh();if(active&&live.status==='live')await call('viewer.heartbeat',{liveId});}catch(e){if(active)report(e);}finally{if(active)timer=setTimeout(poll,15000);}};
- dispose=()=>{active=false;clearTimeout(timer);if(live.status==='live')call('viewer.leave',{liveId}).catch(()=>{});};timer=setTimeout(poll,15000);
+ const stopEvents=watchRealtime({getUser:()=>auth.currentUser,liveId,onSnapshot:data=>{if(current!==generation)return;if(data.live.status!==live.status){void page('live',liveId);return;}renderMessages(data.messages);},onError:report});
+ let active=true,timer;const poll=async()=>{if(!active)return;try{if(active&&live.status==='live')await call('viewer.heartbeat',{liveId});}catch(e){if(active)report(e);}finally{if(active)timer=setTimeout(poll,30000);}};
+ dispose=()=>{active=false;stopEvents();clearTimeout(timer);if(live.status==='live')call('viewer.leave',{liveId}).catch(()=>{});};timer=setTimeout(poll,15000);
  if(live.status!=='live')return;
  let chatKey=crypto.randomUUID(),chatText;
  const send=form('Enviar mensagem',async data=>{const text=data.get('text');if(chatText!==undefined&&chatText!==text)chatKey=crypto.randomUUID();chatText=text;await call('chat.send',{liveId,text,requestKey:chatKey});chatKey=crypto.randomUUID();chatText=undefined;send.reset();await refresh();});field(send,'Mensagem','text').maxLength=300;chat.append(finish(send));
@@ -87,3 +90,16 @@ try{const response=await fetch('/api/v1/config',{cache:'no-store'});if(!response
  onAuthStateChanged(auth,user=>{dispose();generation++;content.replaceChildren();navigation.hidden=!user;login.hidden=!!user;if(user)page('feed');else status.textContent='Entre com uma conta existente para testar.';});
  window.addEventListener('pagehide',()=>dispose());
 }catch{status.textContent='Esta aplicação requer o ambiente staging configurado.';login.hidden=true;}
+
+async function notifications(root,current){root.append(el('h2','Notificações'));const list=el('ul');root.append(list);
+ const render=data=>{if(current!==generation)return;list.replaceChildren();for(const item of data.notifications)list.append(el('li',(item.unread?'● ':'')+(item.title||item.kind)+(item.amount?' · '+item.amount+' Zy Coins':'')));if(!data.notifications.length)list.append(el('li','Nenhuma notificação.'));};
+ render(await call('notifications.list'));if(current!==generation)return;
+ root.append(button('Marcar como lidas',async()=>{await call('notifications.seen',{type:'zycoins'});await call('notifications.seen',{type:'platform'});render(await call('notifications.list'));}));
+ dispose=watchRealtime({getUser:()=>auth.currentUser,onSnapshot:render,onError:report});
+}
+async function admin(root){const {overview}=await call('admin.overview');root.append(el('h2','Administração'),el('p','Contas: '+overview.accounts+' · Lives: '+overview.lives+' · Denúncias: '+overview.reports));
+ let requestKey=crypto.randomUUID(),previous;
+ const penalty=form('Moderação em staging',async data=>{const payload={uid:data.get('uid'),kind:data.get('kind'),reason:data.get('reason'),minutes:data.get('minutes')?Number(data.get('minutes')):null};const value=JSON.stringify(payload);if(previous&&previous!==value)requestKey=crypto.randomUUID();previous=value;await call('admin.penalty',{...payload,requestKey});requestKey=crypto.randomUUID();previous=null;penalty.reset();status.textContent='Ação registrada no staging.';});
+ field(penalty,'UID da conta','uid');const label=el('label','Ação'),select=el('select',null,{name:'kind'});for(const [value,name]of [['warning','Advertir'],['mute','Silenciar'],['ban','Suspender'],['revoke','Revogar']])select.append(el('option',name,{value}));label.append(select);penalty.append(label);
+ field(penalty,'Motivo','reason').maxLength=500;const duration=field(penalty,'Duração em minutos (vazio: sem prazo; revogar: vazio)','minutes','','number',false);duration.min=1;duration.max=525600;root.append(finish(penalty));
+}

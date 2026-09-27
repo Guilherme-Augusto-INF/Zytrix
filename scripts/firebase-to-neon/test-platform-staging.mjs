@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import pg from 'pg';
 import { validateStagingUrl } from './staging-target.mjs';
 import { executePlatform } from '../../server/neon/platform.mjs';
+import {prepareOrder,fulfillSandboxEvent} from '../../server/neon/payments.mjs';
 const [connectionFile,reportFile]=process.argv.slice(2);
 if(!connectionFile||!reportFile)throw Error('Usage: test-platform-staging.mjs <private-connection-file> <private-report-file>');
 const client=new pg.Client({connectionString:validateStagingUrl((await readFile(connectionFile,'utf8')).trim()),ssl:{rejectUnauthorized:true}});
@@ -16,6 +17,11 @@ try{
  const category='fixture-'+randomUUID();
  await client.query('insert into public.categories(id,name) values($1,$2)',[category,'Test category']);
  await client.query('insert into public.identities(id,firebase_uid) values($1,$2),($3,$4)',[a,uidA,b,uidB]);
+ const adminId=randomUUID(),adminUid='fixture-admin-'+randomUUID();
+ await client.query('insert into public.identities(id,firebase_uid) values($1,$2)',[adminId,adminUid]);
+ await client.query('insert into public.admins(user_id) values($1)',[adminId]);
+ await client.query(`insert into public.governance_config(singleton,reports_enabled,rules_version,terms_version,privacy_version,terms_effective)
+ values(true,false,'fixture','fixture','fixture',true) on conflict(singleton) do update set rules_version='fixture',terms_version='fixture',privacy_version='fixture',terms_effective=true`);
  await client.query(`insert into public.user_accounts(user_id,firebase_uid,zytrix_id,email,provider)
    values($1,$2,$3,$4,'password')`,[a,uidA,'ZY-'+randomUUID().replaceAll('-','').slice(0,12),'test-'+randomUUID()+'@example.invalid']);
  await client.query("insert into public.channels(id,firebase_id,owner_id,name,slug) values($1,$2,$3,'Integration test',$4)",[channel,uidB,b,'test-'+randomUUID()]);
@@ -23,6 +29,21 @@ try{
  await client.query('insert into public.wallets(user_id,balance) values($1,100),($2,0)',[a,b]);
  if(process.argv.includes('--runtime-role'))await client.query('set local role zytrix_staging_app');
  const userA={uid:uidA,emailVerified:true};const userB={uid:uidB,emailVerified:true};
+ const admin={uid:adminUid,emailVerified:true};
+ const newUser={uid:'fixture-register-'+randomUUID(),emailVerified:true,email:'registration@example.invalid',provider:'password'};
+ const registration={username:'new_'+randomUUID().slice(0,18),acceptPolicies:true,termsVersion:'fixture',privacyVersion:'fixture',rulesVersion:'fixture'};
+ await assert.rejects(executePlatform(client,newUser,'account.register',{...registration,acceptPolicies:false}),e=>e.code==='policy_acceptance_required');
+ assert.equal((await executePlatform(client,newUser,'account.register',registration)).registered,true);
+ await assert.rejects(executePlatform(client,newUser,'account.register',registration),e=>e.code==='account_already_exists');
+ checks.push('registration requires verified identity and explicit current policies, never recreates existing account');
+ await assert.rejects(executePlatform(client,userA,'admin.overview'),e=>e.code==='forbidden');
+ assert.ok((await executePlatform(client,admin,'admin.overview')).overview.accounts>=3);
+ const penalty={uid:uidA,kind:'mute',reason:'Fixture only',minutes:5,requestKey:randomUUID()};
+ await executePlatform(client,admin,'admin.penalty',penalty);
+ assert.equal((await executePlatform(client,admin,'admin.penalty',penalty)).replayed,true);
+ await assert.rejects(executePlatform(client,admin,'admin.penalty',{...penalty,minutes:6}),e=>e.code==='request_key_conflict');
+ await executePlatform(client,admin,'admin.penalty',{uid:uidA,kind:'revoke',reason:'Fixture completed',requestKey:randomUUID()});
+ checks.push('administration denies ordinary users and audits idempotent moderation');
  await executePlatform(client,userA,'categories.follow',{categoryId:category,following:true});
  await executePlatform(client,userA,'categories.follow',{categoryId:category,following:true});
  assert.deepEqual((await executePlatform(client,userA,'categories.followed')).categories,[category]);
@@ -44,6 +65,11 @@ try{
  const balances=await client.query('select user_id,balance::text,total_sent::text,total_received::text from public.wallets where user_id=any($1::uuid[])',[[a,b]]);
  assert.equal(balances.rows.find(r=>r.user_id===a).balance,'75');assert.equal(balances.rows.find(r=>r.user_id===b).balance,'25');
  checks.push('support atomic transfer and idempotent retry');
+ const notifications=await executePlatform(client,userB,'notifications.list');assert.equal(notifications.notifications.some(n=>n.kind==='support'&&n.amount==='25'),true);
+ assert.equal((await executePlatform(client,userA,'notifications.list')).notifications.some(n=>n.kind==='support'),false);
+ await executePlatform(client,userB,'notifications.seen',{type:'zycoins'});
+ assert.equal((await executePlatform(client,userB,'notifications.list')).notifications.filter(n=>n.kind==='support').some(n=>n.unread),false);
+ checks.push('notification visibility and read markers are isolated by recipient');
  await assert.rejects(executePlatform(client,userA,'support.send',{liveId:streamId,amount:26,requestKey}),e=>e.code==='request_key_conflict');
  await assert.rejects(executePlatform(client,userA,'support.send',{liveId:streamId,amount:1000,requestKey:randomUUID()}),e=>e.code==='insufficient_balance');
  await assert.rejects(executePlatform(client,userB,'support.send',{liveId:streamId,amount:1,requestKey:randomUUID()}),e=>e.code==='invalid_recipient');
@@ -111,6 +137,15 @@ try{
  assert.equal((await executePlatform(client,userA,'discovery.context')).history.some(l=>l.id===streamId),false);
  checks.push('anonymous public feed omits private live');
 
+ const order=await prepareOrder(client,userA,{packageId:'zy100',requestKey:randomUUID()});
+ const sessionId='cs_test_'+randomUUID();await client.query('update public.zy_coin_orders set provider_reference=$2 where id=$1',[order.id,sessionId]);
+ const event={id:'evt_'+randomUUID(),livemode:false,type:'checkout.session.completed',data:{object:{id:sessionId,livemode:false,mode:'payment',payment_status:'paid',currency:'brl',amount_total:490,client_reference_id:order.id,metadata:{zytrixOrderId:order.id}}}};
+ await assert.rejects(fulfillSandboxEvent(client,{...event,data:{object:{...event.data.object,amount_total:1}}}),e=>e.code==='payment_mismatch');
+ const before=BigInt((await executePlatform(client,userA,'wallet.get')).wallet.balance);
+ assert.equal((await fulfillSandboxEvent(client,event)).credited,true);assert.equal((await fulfillSandboxEvent(client,event)).replayed,true);
+ assert.equal(BigInt((await executePlatform(client,userA,'wallet.get')).wallet.balance),before+100n);
+ assert.equal((await client.query('select count(*)::int as n from public.zy_coin_transactions where order_id=$1',[order.id])).rows[0].n,1);
+ checks.push('simulated sandbox payment rejects wrong amount and credits once; no Stripe network payment');
  await client.query('rollback');await writeFile(reportFile,JSON.stringify({status:'PASS',checks,fixtures:'ROLLED_BACK'},null,2));
  console.log(JSON.stringify({status:'PASS',checks:checks.length,fixtures:'ROLLED_BACK'}));
 }catch(e){await client.query('rollback').catch(()=>{});const permission=e.code==='42501'&&/^permission denied for (table|schema) [a-z_]+$/.test(e.message)?e.message:undefined;await writeFile(reportFile,JSON.stringify({status:'FAIL',checks,code:e.code??e.name,permission,fixtures:'ROLLED_BACK'},null,2));console.log(JSON.stringify({status:'FAIL',code:e.code??e.name,permission}));process.exitCode=1;}finally{await client.end();}
