@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import {
-  doc, setDoc, getDoc, collection, serverTimestamp, Timestamp,
+  doc, setDoc, getDoc, getDocs, collection, serverTimestamp, Timestamp,
   updateDoc, deleteDoc, writeBatch, runTransaction, increment
 } from 'firebase/firestore';
 
