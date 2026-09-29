@@ -380,3 +380,59 @@ test('canal existente com transmissão perdida permite recuperar sem recriar o c
     currentStreamId: 'carol', createdAt: serverTimestamp()
   }));
 });
+
+
+test('presença única incrementa contador público e saída decrementa de forma atômica', async () => {
+  const db = as('alice');
+  const streamRef = doc(db, 'streams', 'live1');
+  const presenceRef = doc(db, 'streams', 'live1', 'livePresence', 'alice');
+  const legacyRef = doc(db, 'streams', 'live1', 'viewers', 'alice');
+
+  // Only a stream update without its matching presence must never work.
+  await assertFails(updateDoc(streamRef, { viewerCount: 1 }));
+
+  await assertSucceeds(runTransaction(db, async tx => {
+    const [stream, presence, legacy] = await Promise.all([
+      tx.get(streamRef), tx.get(presenceRef), tx.get(legacyRef)
+    ]);
+    assert.equal(stream.data().viewerCount, 0);
+    assert.equal(presence.exists(), false);
+    tx.set(presenceRef, {
+      uid: 'alice', joinedAt: serverTimestamp(), lastSeen: serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 120000)
+    });
+    if (!legacy.exists()) tx.set(legacyRef, {
+      uid: 'alice', joinedAt: serverTimestamp(), lastSeen: serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 120000)
+    });
+    tx.update(streamRef, { viewerCount: 1 });
+  }));
+  assert.equal((await getDoc(streamRef)).data().viewerCount, 1);
+  // No duplicate count for the same viewer.
+  await assertFails(updateDoc(streamRef, { viewerCount: 2 }));
+
+  await assertSucceeds(runTransaction(db, async tx => {
+    const [stream, presence, legacy] = await Promise.all([
+      tx.get(streamRef), tx.get(presenceRef), tx.get(legacyRef)
+    ]);
+    assert.equal(presence.exists(), true);
+    tx.delete(presenceRef);
+    if (legacy.exists()) tx.delete(legacyRef);
+    tx.update(streamRef, { viewerCount: stream.data().viewerCount - 1 });
+  }));
+  assert.equal((await getDoc(streamRef)).data().viewerCount, 0);
+});
+
+test('outro usuário não pode fingir presença nem alterar viewerCount', async () => {
+  const aliceDb = as('alice');
+  const bobDb = as('bob');
+  const anonymousDb = anon();
+  await assertFails(updateDoc(doc(aliceDb, 'streams', 'live1'), { viewerCount: 99 }));
+  await assertFails(updateDoc(doc(bobDb, 'streams', 'live1'), { viewerCount: 99 }));
+  await assertFails(updateDoc(doc(anonymousDb, 'streams', 'live1'), { viewerCount: 1 }));
+  await assertFails(setDoc(doc(aliceDb, 'streams', 'live1', 'livePresence', 'bob'), {
+    uid: 'bob', joinedAt: serverTimestamp(), lastSeen: serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + 120000)
+  }));
+  await assertFails(getDocs(collection(aliceDb, 'streams', 'live1', 'livePresence')));
+});
