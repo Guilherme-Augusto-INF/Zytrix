@@ -45,3 +45,13 @@ test('senha local exige ao menos 10 caracteres, letra e número', () => {
   assert.equal(strongPassword('abc123'), false);
   assert.equal(strongPassword('Zytrix2026!'), true);
 });
+
+
+test('URLs de imagem aceitas respeitam os mesmos hosts das regras Firestore', () => {
+  assert.ok(safeImageUrl('https://firebasestorage.googleapis.com/v0/b/zytrix-ca4f2/o/test.png?alt=media'));
+  assert.ok(safeImageUrl('https://images.kick.com/sample.jpg'));
+  assert.equal(safeImageUrl('https://i.imgur.com/example.png'), '');
+  assert.equal(safeImageUrl('https://example.com/photo.jpg'), '');
+  assert.equal(safeImageUrl('http://lh3.googleusercontent.com/image.jpg'), '');
+  assert.equal(safeImageUrl('javascript:alert(1)'), '');
+});
