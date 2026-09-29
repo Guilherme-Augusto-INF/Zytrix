@@ -8,6 +8,7 @@ import {
   onSnapshot
 } from './firebase.js';
 import { escapeHtml } from './ui.js';
+import { getGuestPresenceIdentity } from './guest-presence.js';
 import {
   selectedStreamId,
   isFollowing,
@@ -177,7 +178,7 @@ async function startPresenceForUser() {
   if (previousPresence) await previousPresence();
   if (generation !== presenceGeneration) return;
 
-  if (!currentUser || !streamId || !stream || document.visibilityState === 'hidden') {
+  if (!streamId || !stream || document.visibilityState === 'hidden') {
     renderPanel();
     return;
   }
@@ -204,7 +205,13 @@ async function startPresenceForUser() {
   }
 
   try {
-    const stop = await startViewerPresence(currentUser.uid, streamId);
+    // Signed-in users use their primary identity; visitors get an isolated
+    // anonymous Firebase identity solely for presence tracking.
+    const identity = currentUser
+      ? { uid: currentUser.uid, db }
+      : await getGuestPresenceIdentity();
+    if (generation !== presenceGeneration) return;
+    const stop = await startViewerPresence(identity.uid, streamId, identity.db);
     if (generation !== presenceGeneration) {
       await stop();
       return;
@@ -212,7 +219,9 @@ async function startPresenceForUser() {
     stopPresence = stop;
     renderPanel();
   } catch (error) {
-    console.warn('Presença do espectador indisponível.', error);
+    // If Anonymous Auth is disabled in Firebase, guest viewing still works,
+    // but cannot safely contribute to the public counter.
+    console.warn('Presença do espectador indisponível.', error?.code || error);
   }
 }
 
