@@ -1,4 +1,4 @@
-import { auth, db, googleProvider, onAuthStateChanged, EmailAuthProvider, reauthenticateWithPopup, reauthenticateWithCredential, deleteUser, doc, getDoc, getDocs, deleteDoc, onSnapshot, updateDoc, query, collection, collectionGroup, where, limit, serverTimestamp, writeBatch } from './firebase.js';
+import { auth, db, googleProvider, onAuthStateChanged, EmailAuthProvider, reauthenticateWithPopup, reauthenticateWithCredential, deleteUser, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot, updateDoc, query, collection, collectionGroup, where, limit, serverTimestamp, writeBatch } from './firebase.js';
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
 import { safeImageUrl } from './security.js';
@@ -303,7 +303,20 @@ async function saveProfile() {
             data.username = name;
             data.usernameUpdatedAt = serverTimestamp();
         }
-        await updateDoc(profileRef, data);
+        const latestProfile = await getDoc(profileRef);
+        if (!latestProfile.exists()) {
+            // Repair an older account with a missing profile document.
+            await setDoc(profileRef, {
+                uid: user.uid,
+                username: name,
+                photoURL,
+                bio,
+                createdAt: serverTimestamp(),
+                usernameUpdatedAt: serverTimestamp()
+            });
+        } else {
+            await updateDoc(profileRef, data);
+        }
 
         // The homepage obtains its channel metadata independently of profiles.
         // Image and name changes should propagate to existing channels too.
@@ -319,6 +332,10 @@ async function saveProfile() {
             console.warn('Perfil atualizado, mas não foi possível sincronizar a foto do canal.', syncError);
         }
         await load();
+        const editArea = document.querySelector('#edit-area');
+        if (editArea) editArea.classList.remove('hidden');
+        const success = document.querySelector('#profile-msg');
+        if (success) success.innerHTML = '<div class="message ok">Foto e dados de perfil salvos com sucesso.</div>';
     } catch (error) {
         console.error('Falha ao atualizar perfil:', error);
         message.textContent = error?.code === 'permission-denied'
