@@ -5,6 +5,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  runTransaction,
   deleteDoc,
   onSnapshot,
   serverTimestamp,
@@ -108,35 +109,85 @@ export function watchActiveViewers(streamId, callback, onError = console.error) 
   };
 }
 
+// Each signed-in account counts once per live. A server-validated Firestore
+// transaction couples the presence document with the publicly visible count.
+// Sudden browser/network termination still needs a server-side expiry sweeper.
 export async function startViewerPresence(uid, streamId) {
-  if (!uid || !streamId) return () => {};
+  if (!uid || !streamId) return async () => {};
 
-  const presenceRef = doc(db, 'streams', streamId, 'viewers', uid);
-  const existing = await getDoc(presenceRef);
+  const streamRef = doc(db, 'streams', streamId);
+  const presenceRef = doc(db, 'streams', streamId, 'livePresence', uid);
+  // Legacy presence remains for watch-progress and creator dashboard features.
+  const legacyRef = doc(db, 'streams', streamId, 'viewers', uid);
+  let active = true;
+  let stopped = false;
 
-  if (existing.exists()) {
-    await updateDoc(presenceRef, { lastSeen: serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + 2 * 60 * 1000) });
-  } else {
-    await setDoc(presenceRef, {
-      uid,
-      joinedAt: serverTimestamp(),
-      lastSeen: serverTimestamp(),
-      expiresAt: Timestamp.fromMillis(Date.now() + 2 * 60 * 1000)
-    });
-  }
+  const expiry = () => Timestamp.fromMillis(Date.now() + 2 * 60 * 1000);
+
+  await runTransaction(db, async tx => {
+    const [streamSnap, presenceSnap, legacySnap] = await Promise.all([
+      tx.get(streamRef), tx.get(presenceRef), tx.get(legacyRef)
+    ]);
+    if (!streamSnap.exists() || streamSnap.data().status !== 'live'
+        || streamSnap.data().streamerUid === uid) {
+      active = false;
+      return;
+    }
+    if (presenceSnap.exists()) {
+      tx.update(presenceRef, { lastSeen: serverTimestamp(), expiresAt: expiry() });
+    } else {
+      tx.set(presenceRef, {
+        uid, joinedAt: serverTimestamp(), lastSeen: serverTimestamp(), expiresAt: expiry()
+      });
+      tx.update(streamRef, { viewerCount: Math.max(0, Number(streamSnap.data().viewerCount || 0)) + 1 });
+    }
+    if (legacySnap.exists()) {
+      tx.update(legacyRef, { lastSeen: serverTimestamp(), expiresAt: expiry() });
+    } else {
+      tx.set(legacyRef, {
+        uid, joinedAt: serverTimestamp(), lastSeen: serverTimestamp(), expiresAt: expiry()
+      });
+    }
+  });
+
+  if (!active) return async () => {};
 
   const heartbeat = async () => {
+    if (stopped) return;
     try {
-      await updateDoc(presenceRef, { lastSeen: serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + 2 * 60 * 1000) });
+      await Promise.all([
+        updateDoc(presenceRef, { lastSeen: serverTimestamp(), expiresAt: expiry() }),
+        updateDoc(legacyRef, { lastSeen: serverTimestamp(), expiresAt: expiry() })
+      ]);
     } catch (error) {
-      console.warn('Não foi possível atualizar a presença do espectador.', error);
+      console.warn('Não foi possível renovar a presença.', error);
     }
   };
 
   const timer = setInterval(heartbeat, 30_000);
 
-  return () => {
+  return async () => {
+    if (stopped) return;
+    stopped = true;
     clearInterval(timer);
-    deleteDoc(presenceRef).catch(() => {});
+    try {
+      await runTransaction(db, async tx => {
+        const [streamSnap, presenceSnap, legacySnap] = await Promise.all([
+          tx.get(streamRef), tx.get(presenceRef), tx.get(legacyRef)
+        ]);
+        if (!presenceSnap.exists()) return;
+        if (streamSnap.exists() && Number(streamSnap.data().viewerCount || 0) > 0) {
+          tx.update(streamRef, {
+            viewerCount: Number(streamSnap.data().viewerCount) - 1
+          });
+          tx.delete(presenceRef);
+          if (legacySnap.exists()) tx.delete(legacyRef);
+        }
+      });
+    } catch (error) {
+      // For an abrupt disconnect, a trusted expiry job must reconcile stale
+      // presence; never fake a successful decrement from the browser.
+      console.warn('A presença não pôde ser encerrada imediatamente.', error);
+    }
   };
 }
