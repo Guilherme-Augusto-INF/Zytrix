@@ -436,3 +436,32 @@ test('outro usuário não pode fingir presença nem alterar viewerCount', async 
   }));
   await assertFails(getDocs(collection(aliceDb, 'streams', 'live1', 'livePresence')));
 });
+
+
+test('visitante anônimo autenticado no app isolado também pode contar presença', async () => {
+  // The separate guest Firebase app issues an anonymous auth identity.
+  const guest = env.authenticatedContext('guest-session', {
+    firebase: { sign_in_provider: 'anonymous' }, email_verified: false
+  }).firestore();
+  const streamRef = doc(guest, 'streams', 'live1');
+  const presenceRef = doc(guest, 'streams', 'live1', 'livePresence', 'guest-session');
+  const legacyRef = doc(guest, 'streams', 'live1', 'viewers', 'guest-session');
+  await assertSucceeds(runTransaction(guest, async tx => {
+    const [stream, presence, legacy] = await Promise.all([
+      tx.get(streamRef), tx.get(presenceRef), tx.get(legacyRef)
+    ]);
+    assert.equal(presence.exists(), false);
+    tx.set(presenceRef, {
+      uid: 'guest-session', joinedAt: serverTimestamp(),
+      lastSeen: serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 120000)
+    });
+    if (!legacy.exists()) tx.set(legacyRef, {
+      uid: 'guest-session', joinedAt: serverTimestamp(),
+      lastSeen: serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 120000)
+    });
+    tx.update(streamRef, { viewerCount: stream.data().viewerCount + 1 });
+  }));
+  assert.equal((await getDoc(streamRef)).data().viewerCount, 1);
+});
