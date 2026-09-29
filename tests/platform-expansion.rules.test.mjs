@@ -323,3 +323,60 @@ test('promoção só pode ser criada por admin e claim exige contador, carteira 
     uid: 'alice', promotionId: 'promo1', amount: 25, transactionId: 'fake', createdAt: serverTimestamp()
   }));
 });
+
+
+test('criar canal e transmissão na mesma operação exige e-mail verificado', async () => {
+  const makeBatch = (db, uid, streamId) => {
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'channels', uid), {
+      ownerUid: uid, channelName: 'Meu canal', description: '', avatarURL: '',
+      bannerURL: '', categoryId: 'Just Chatting', isLive: false,
+      currentStreamId: streamId, createdAt: serverTimestamp()
+    });
+    batch.set(doc(db, 'streams', streamId), {
+      streamerUid: uid, channelId: uid, title: 'Minha primeira live na Zytrix',
+      description: '', categoryId: 'Just Chatting', thumbnailURL: '',
+      status: 'offline', playbackURL: 'https://www.twitch.tv/example',
+      startedAt: null, endedAt: null, createdAt: serverTimestamp(), viewerCount: 0
+    });
+    return batch.commit();
+  };
+  const unverified = env.authenticatedContext('carol', { email_verified: false }).firestore();
+  await assertFails(makeBatch(unverified, 'carol', 'carol'));
+  const verified = as('carol');
+  await assertSucceeds(makeBatch(verified, 'carol', 'carol'));
+  const [channel, stream] = await Promise.all([
+    getDoc(doc(verified, 'channels', 'carol')),
+    getDoc(doc(verified, 'streams', 'carol'))
+  ]);
+  assert.equal(channel.data().currentStreamId, 'carol');
+  assert.equal(stream.data().streamerUid, 'carol');
+});
+
+test('canal existente com transmissão perdida permite recuperar sem recriar o canal', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'channels', 'carol'), {
+      ownerUid: 'carol', channelName: 'Canal preservado', description: '',
+      avatarURL: '', bannerURL: '', categoryId: 'Gaming', isLive: false,
+      currentStreamId: 'old-missing', createdAt: Timestamp.fromMillis(1)
+    });
+  });
+  const db = as('carol');
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'channels', 'carol'), { currentStreamId: 'carol' });
+  batch.set(doc(db, 'streams', 'carol'), {
+    streamerUid: 'carol', channelId: 'carol', title: 'Retorno', description: '',
+    categoryId: 'Gaming', thumbnailURL: '', status: 'offline',
+    playbackURL: 'https://kick.com/example', startedAt: null, endedAt: null,
+    createdAt: serverTimestamp(), viewerCount: 0
+  });
+  await assertSucceeds(batch.commit());
+  const channel = await getDoc(doc(db, 'channels', 'carol'));
+  assert.equal(channel.data().channelName, 'Canal preservado');
+  assert.equal(channel.data().currentStreamId, 'carol');
+  await assertFails(setDoc(doc(as('alice'), 'channels', 'carol'), {
+    ownerUid: 'alice', channelName: 'Hijack', description: '', avatarURL: '',
+    bannerURL: '', categoryId: 'Gaming', isLive: false,
+    currentStreamId: 'carol', createdAt: serverTimestamp()
+  }));
+});
