@@ -150,8 +150,13 @@ function render() {
           <input
             id="edit-photo"
             class="input"
+            type="url"
+            maxlength="2048"
+            autocomplete="url"
+            placeholder="https://lh3.googleusercontent.com/..."
             value="${escapeAttr(profile.photoURL || '')}"
           >
+          <small class="muted">Use uma URL HTTPS direta de imagem pública de um provedor compatível. Não cole o link da página de perfil.</small>
         </div>
 
         <div class="form-group">
@@ -259,27 +264,73 @@ function render() {
 }
 async function saveProfile() {
     const message = document.querySelector('#profile-msg');
+    const button = document.querySelector('#save-profile');
     const name = document.querySelector('#edit-name').value.trim();
-    const photoURL = document.querySelector('#edit-photo').value.trim();
+    const rawPhoto = document.querySelector('#edit-photo').value.trim();
+    const photoURL = safeImageUrl(rawPhoto);
     const bio = document.querySelector('#edit-bio').value.trim();
+    if (name.length < 2 || name.length > 30) {
+        message.textContent = 'O nome deve ter de 2 a 30 caracteres.';
+        return;
+    }
+    if (rawPhoto && !photoURL) {
+        message.textContent = 'URL da foto não permitida. Use uma imagem HTTPS de Google, Twitch, Kick, YouTube ou Firebase Storage. Links comuns de páginas ou arquivos privados não funcionam.';
+        return;
+    }
+    if (bio.length > 500) {
+        message.textContent = 'A bio deve ter até 500 caracteres.';
+        return;
+    }
+    // A name change is separate from the image change: show the cooldown
+    // immediately instead of silently failing the entire profile update.
+    const originalName = profile?.username || '';
+    const changedName = name !== originalName;
+    if (changedName) {
+        const changedAt = profile?.usernameUpdatedAt?.toMillis?.();
+        if (changedAt && Date.now() < changedAt + 7 * 24 * 60 * 60 * 1000) {
+            const allowed = new Date(changedAt + 7 * 24 * 60 * 60 * 1000);
+            message.textContent = 'Você poderá alterar o nome a partir de ' + allowed.toLocaleDateString('pt-BR') + '. Para atualizar só a foto, mantenha o nome anterior.';
+            return;
+        }
+    }
+
+    button.disabled = true;
+    message.textContent = 'Salvando perfil...';
     try {
-        const data = {
-            photoURL,
-            bio
-        };
-        if (name !== profile.username) {
+        const profileRef = doc(db, 'profiles', user.uid);
+        const data = { photoURL, bio };
+        if (changedName) {
             data.username = name;
             data.usernameUpdatedAt = serverTimestamp();
         }
-        await updateDoc(doc(db, 'profiles', user.uid), data);
-        message.innerHTML = '<div class="message ok">Perfil atualizado.</div>';
+        await updateDoc(profileRef, data);
+
+        // The homepage obtains its channel metadata independently of profiles.
+        // Image and name changes should propagate to existing channels too.
+        try {
+            const channelRef = doc(db, 'channels', user.uid);
+            const channelSnap = await getDoc(channelRef);
+            if (channelSnap.exists()) {
+                const channelUpdate = { avatarURL: photoURL };
+                if (changedName) channelUpdate.channelName = name;
+                await updateDoc(channelRef, channelUpdate);
+            }
+        } catch (syncError) {
+            console.warn('Perfil atualizado, mas não foi possível sincronizar a foto do canal.', syncError);
+        }
         await load();
-    }
-    catch (error) {
-        console.error(error);
-        message.innerHTML = '<div class="message err">Não foi possível atualizar o perfil.</div>';
+    } catch (error) {
+        console.error('Falha ao atualizar perfil:', error);
+        message.textContent = error?.code === 'permission-denied'
+            ? 'Alteração recusada. Confira o domínio da imagem e, se estiver alterando o nome, respeite o intervalo de 7 dias.'
+            : error?.code === 'unavailable'
+                ? 'Sem conexão com o banco. Tente novamente.'
+                : 'Não foi possível atualizar o perfil. Tente novamente.';
+    } finally {
+        if (button.isConnected) button.disabled = false;
     }
 }
+
 async function createStreamer() {
     if (creatingChannel || !user) return;
     const message = document.querySelector('#streamer-msg');
