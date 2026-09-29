@@ -1,6 +1,7 @@
 import { auth, db, onAuthStateChanged, doc, getDoc, getDocs, query, collection, where, limit, updateDoc, serverTimestamp, writeBatch, ensureWallet } from './firebase.js';
 import { header, footer, categories, escapeAttr, escapeHtml } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
+import { safeImageUrl } from './security.js';
 import { SUPPORT_ALERT_SOUNDS, normalizeSupportAlertSound, playSupportAlertSound, unlockSupportAlertAudio } from './support-alert-sound.js';
 header();
 footer();
@@ -76,9 +77,13 @@ function render() {
             <input
               id="thumbnail"
               class="input"
+              type="url"
+              maxlength="2048"
+              placeholder="https://i.ytimg.com/vi/ID/maxresdefault.jpg"
               value="${escapeAttr(stream.thumbnailURL || '')}"
               autocomplete="url"
             >
+            <small class="muted">Informe uma URL HTTPS direta de imagem pública de um provedor compatível: Google, YouTube, Twitch, Kick ou Firebase Storage.</small>
           </div>
 
           <div class="form-group">
@@ -222,7 +227,13 @@ function render() {
 function collectForm({ requireSubcategory = false } = {}) {
     const title = document.querySelector('#title').value.trim();
     const description = document.querySelector('#description').value.trim();
-    const thumbnailURL = document.querySelector('#thumbnail').value.trim();
+    const rawThumbnail = document.querySelector('#thumbnail').value.trim();
+    const thumbnailURL = safeImageUrl(rawThumbnail);
+    if (rawThumbnail && !thumbnailURL) {
+        return {
+            error: 'Thumbnail inválida: use uma URL HTTPS direta de imagem pública de Google, YouTube, Twitch, Kick ou Firebase Storage. Links de sites arbitrários não são permitidos.'
+        };
+    }
     const category = document.querySelector('#category').value;
     const subcategory = document.querySelector('#subcategory').value;
     const source = parseStreamingSource(document.querySelector('#playback-url').value);
@@ -279,7 +290,9 @@ async function save() {
     }
     catch (error) {
         console.error(error);
-        message.innerHTML = '<div class="message err">Não foi possível salvar.</div>';
+        message.innerHTML = error?.code === 'permission-denied'
+            ? '<div class="message err">O banco recusou as configurações. Verifique o domínio da thumbnail e as permissões de streamer.</div>'
+            : '<div class="message err">Não foi possível salvar. Verifique a conexão e tente novamente.</div>';
     }
 }
 async function toggle() {
@@ -326,7 +339,9 @@ async function toggle() {
     }
     catch (error) {
         console.error(error);
-        message.innerHTML = '<div class="message err">Não foi possível alterar o status.</div>';
+        message.innerHTML = error?.code === 'permission-denied'
+            ? '<div class="message err">O banco recusou a atualização. Verifique a thumbnail, o e-mail verificado e suas permissões.</div>'
+            : '<div class="message err">Não foi possível alterar o status. Tente novamente.</div>';
     }
 }
 onAuthStateChanged(auth, currentUser => {
