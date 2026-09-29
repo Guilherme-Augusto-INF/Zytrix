@@ -1,6 +1,7 @@
 import { auth, db, googleProvider, onAuthStateChanged, EmailAuthProvider, reauthenticateWithPopup, reauthenticateWithCredential, deleteUser, doc, getDoc, getDocs, deleteDoc, onSnapshot, updateDoc, query, collection, collectionGroup, where, limit, serverTimestamp, writeBatch } from './firebase.js';
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
+import { safeImageUrl } from './security.js';
 header();
 footer();
 const root = document.querySelector('#profile-root');
@@ -11,6 +12,7 @@ let wallet = null;
 let channel = null;
 let stream = null;
 let walletUnsubscribe = null;
+let creatingChannel = false;
 function dateText(timestamp) {
     try {
         return timestamp?.toDate?.().toLocaleDateString('pt-BR', {
@@ -41,8 +43,17 @@ async function load() {
         getDoc(doc(db, 'wallets', user.uid)),
         getDoc(doc(db, 'channels', user.uid))
     ]);
-    profile = profileSnap.exists() ? profileSnap.data() : null;
-    account = accountSnap.exists() ? accountSnap.data() : null;
+    // Older accounts may have lost a profile document during prior migrations.
+    // Keep channel setup available instead of trapping them on a blank profile.
+    profile = profileSnap.exists() ? profileSnap.data() : {
+        username: user.displayName || 'Streamer',
+        photoURL: safeImageUrl(user.photoURL || ''),
+        bio: ''
+    };
+    account = accountSnap.exists() ? accountSnap.data() : {
+        zytrixId: `ZY-${user.uid.slice(0, 10).toUpperCase()}`,
+        createdAt: null
+    };
     wallet = walletSnap.exists() ? walletSnap.data() : null;
     channel = channelSnap.exists() ? channelSnap.data() : null;
     stream = channel ? await findStream(user.uid) : null;
@@ -65,10 +76,6 @@ async function load() {
     });
 }
 function render() {
-    if (!profile || !account) {
-        root.innerHTML = '<div class="state">Perfil indisponível.</div>';
-        return;
-    }
     const initials = (profile.username || 'U').charAt(0).toUpperCase();
     const streamSource = parseStreamingSource(stream?.playbackURL || '');
     const platformLabel = streamSource
@@ -192,9 +199,12 @@ function render() {
             Você pode trocar entre YouTube, Twitch e Kick no painel de configuração da live.
           </p>
 
-          <a class="btn btn-primary" href="config-live.html">
-            Configurar live
-          </a>
+          ${stream
+            ? `<a class="btn btn-primary" href="config-live.html">Configurar live</a>`
+            : `<p class="muted">O canal existe, mas sua transmissão não foi encontrada. Vincule novamente seu canal para recuperar a configuração.</p>
+               <div class="form-group"><label for="stream-url">Link do YouTube, Twitch ou Kick</label><input id="stream-url" class="input" type="url" autocomplete="url" placeholder="https://www.twitch.tv/seu_canal"></div>
+               <button id="be-streamer" class="btn btn-primary">Recuperar minha live</button>
+               <div id="streamer-msg" role="status" aria-live="polite"></div>`}
         `
         : `
           <h2>Você deseja fazer lives?</h2>
@@ -212,7 +222,7 @@ function render() {
               autocomplete="url"
             >
             <small class="muted">
-              Use a URL completa do canal. A Zytrix detecta a plataforma automaticamente.
+              Para Twitch/Kick, use o link do canal. Para YouTube, use o link de uma live ou vídeo (watch?v=, live/ ou youtu.be).
             </small>
           </div>
 
@@ -220,7 +230,7 @@ function render() {
             Criar meu canal
           </button>
 
-          <div id="streamer-msg"></div>
+          <div id="streamer-msg" role="status" aria-live="polite"></div>
         `}
     </div>
 
@@ -243,8 +253,8 @@ function render() {
     };
     document.querySelector('#save-profile').onclick = saveProfile;
     document.querySelector('#delete-account').onclick = deleteAccount;
-    if (!channel) {
-        document.querySelector('#be-streamer').onclick = createStreamer;
+    if (!channel || !stream) {
+        document.querySelector('#be-streamer')?.addEventListener('click', createStreamer);
     }
 }
 async function saveProfile() {
@@ -271,45 +281,77 @@ async function saveProfile() {
     }
 }
 async function createStreamer() {
+    if (creatingChannel || !user) return;
     const message = document.querySelector('#streamer-msg');
     const input = document.querySelector('#stream-url');
+    const button = document.querySelector('#be-streamer');
+    if (!message || !input || !button) return;
+
     const source = parseStreamingSource(input.value);
     if (!source) {
-        message.innerHTML = `
-      <div class="message err">
-        Use um link válido do YouTube, Twitch ou Kick.
-      </div>
-    `;
+        message.innerHTML = '<div class="message err">Informe um link válido: canal da Twitch/Kick ou uma live/vídeo do YouTube.</div>';
+        input.focus();
         return;
     }
+
+    creatingChannel = true;
+    button.disabled = true;
+    message.textContent = 'Validando sua conta e configurando canal...';
     try {
-        const existingStream = await findStream(user.uid);
+        // Firestore stream CREATE requires a verified Firebase ID token. Reload
+        // both the Auth user and token so newly verified users can continue.
+        await user.reload();
+        await user.getIdToken(true);
+        if (!user.emailVerified) {
+            message.innerHTML = '<div class="message err">Verifique seu e-mail antes de criar a transmissão. Depois, clique novamente neste botão.</div>';
+            return;
+        }
+
+        const channelRef = doc(db, 'channels', user.uid);
+        const channelSnap = await getDoc(channelRef);
+        const existingChannel = channelSnap.exists() ? channelSnap.data() : null;
+        // First try the stored stream ID; fallback to historical streams.
+        let existingStream = null;
+        if (existingChannel?.currentStreamId) {
+            const snap = await getDoc(doc(db, 'streams', existingChannel.currentStreamId));
+            if (snap.exists() && snap.data().streamerUid === user.uid) {
+                existingStream = { id: snap.id, ...snap.data() };
+            }
+        }
+        if (!existingStream) existingStream = await findStream(user.uid);
         const streamId = existingStream?.id || user.uid;
         const batch = writeBatch(db);
-        batch.set(doc(db, 'channels', user.uid), {
-            ownerUid: user.uid,
-            channelName: profile.username || 'Streamer',
-            description: profile.bio || '',
-            avatarURL: profile.photoURL || '',
-            bannerURL: '',
-            categoryId: existingStream?.categoryId || 'Just Chatting',
-            isLive: existingStream?.status === 'live',
-            currentStreamId: streamId,
-            createdAt: serverTimestamp()
-        }, { merge: true });
+
+        if (!existingChannel) {
+            // Only create the channel if absent. Never reset a user's followers
+            // or channel metadata while repairing an orphan stream.
+            batch.set(channelRef, {
+                ownerUid: user.uid,
+                channelName: String(profile?.username || user.displayName || 'Streamer').slice(0, 30),
+                description: String(profile?.bio || '').slice(0, 500),
+                avatarURL: safeImageUrl(profile?.photoURL || ''),
+                bannerURL: '',
+                categoryId: existingStream?.categoryId || 'Just Chatting',
+                isLive: existingStream?.status === 'live',
+                currentStreamId: streamId,
+                createdAt: serverTimestamp()
+            });
+        } else if (existingChannel.currentStreamId !== streamId) {
+            batch.update(channelRef, { currentStreamId: streamId });
+        }
+
         if (existingStream) {
             batch.update(doc(db, 'streams', streamId), {
                 playbackURL: source.canonicalUrl
             });
-        }
-        else {
+        } else {
             batch.set(doc(db, 'streams', streamId), {
                 streamerUid: user.uid,
                 channelId: user.uid,
                 title: 'Minha primeira live na Zytrix',
                 description: '',
-                categoryId: 'Just Chatting',
-                thumbnailURL: profile.photoURL || '',
+                categoryId: existingChannel?.categoryId || 'Just Chatting',
+                thumbnailURL: safeImageUrl(profile?.photoURL || ''),
                 status: 'offline',
                 playbackURL: source.canonicalUrl,
                 startedAt: null,
@@ -318,19 +360,36 @@ async function createStreamer() {
                 viewerCount: 0
             });
         }
+
         await batch.commit();
-        message.innerHTML = `
-      <div class="message ok">
-        Canal ${streamingPlatformLabel(source.platform)} vinculado e conta de streamer criada.
-      </div>
-    `;
+        // Verify the persisted state before presenting creation as successful.
+        const [savedChannel, savedStream] = await Promise.all([
+            getDoc(channelRef),
+            getDoc(doc(db, 'streams', streamId))
+        ]);
+        if (!savedChannel.exists() || !savedStream.exists()
+            || savedStream.data().streamerUid !== user.uid) {
+            throw new Error('channel-verification-failed');
+        }
         await load();
-    }
-    catch (error) {
-        console.error(error);
-        message.innerHTML = '<div class="message err">Não foi possível criar o canal.</div>';
+        // load() rerenders, so a success message belongs in the new panel.
+        const current = document.querySelector('#streamer-msg');
+        if (current) current.innerHTML = '<div class="message ok">Canal recuperado. Configure sua live.</div>';
+    } catch (error) {
+        console.error('Erro ao criar/recuperar canal:', error);
+        if (error?.code === 'permission-denied') {
+            message.textContent = 'O banco recusou a criação. Verifique seu e-mail e as permissões da conta. Se continuar, informe o suporte.';
+        } else if (error?.code === 'unavailable' || error?.code === 'auth/network-request-failed') {
+            message.textContent = 'Sem conexão com o servidor. Verifique sua internet e tente novamente.';
+        } else {
+            message.textContent = 'Não foi possível criar o canal. Nenhuma nova tentativa será feita automaticamente.';
+        }
+    } finally {
+        creatingChannel = false;
+        if (button.isConnected) button.disabled = false;
     }
 }
+
 async function reauthenticateForDeletion() {
     const providers = user.providerData.map(item => item.providerId);
     if (providers.includes('google.com')) {
