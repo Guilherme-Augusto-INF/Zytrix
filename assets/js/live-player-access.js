@@ -6,13 +6,10 @@ const streamId = new URLSearchParams(location.search).get('stream') ||
   '';
 const root = document.querySelector('#live-root');
 const MATURE_SESSION_KEY = 'zytrixMatureViewerConfirmed';
-const TWITCH_SDK_ID = 'zytrix-twitch-embed-sdk';
 
 let stream = null;
 let stopStream = null;
 let observer = null;
-let twitchSdkPromise = null;
-let mountVersion = 0;
 
 function matureConfirmed() {
   return sessionStorage.getItem(MATURE_SESSION_KEY) === '1';
@@ -20,27 +17,6 @@ function matureConfirmed() {
 
 function externalLink(source) {
   return source?.canonicalUrl || '#';
-}
-
-function loadTwitchSdk() {
-  if (window.Twitch?.Embed) return Promise.resolve(window.Twitch);
-  if (twitchSdkPromise) return twitchSdkPromise;
-  twitchSdkPromise = new Promise((resolve, reject) => {
-    const existing = document.getElementById(TWITCH_SDK_ID);
-    if (existing) {
-      existing.addEventListener('load', () => resolve(window.Twitch), { once: true });
-      existing.addEventListener('error', reject, { once: true });
-      return;
-    }
-    const script = document.createElement('script');
-    script.id = TWITCH_SDK_ID;
-    script.src = 'https://embed.twitch.tv/embed/v1.js';
-    script.async = true;
-    script.onload = () => resolve(window.Twitch);
-    script.onerror = () => reject(new Error('twitch-sdk'));
-    document.head.appendChild(script);
-  });
-  return twitchSdkPromise;
 }
 
 function removeAccessHelp() {
@@ -159,63 +135,25 @@ function renderYouTube(player, source) {
   renderAccessHelp(player, source);
 }
 
-async function renderTwitch(player, source, version) {
+function renderTwitch(player, source) {
+  // Use Twitch's documented iframe embed. The previous SDK loader was blocked
+  // by the production CSP and replaced the working iframe with an error.
   player.innerHTML = '';
-  const host = document.createElement('div');
-  host.className = 'twitch-embed-host';
-  host.id = `twitch-embed-${streamId}-${version}`;
+  const params = new URLSearchParams({
+    channel: source.username,
+    autoplay: 'true',
+    muted: 'true'
+  });
+  params.append('parent', location.hostname);
 
-  const loading = document.createElement('div');
-  loading.className = 'player-access-loading';
-  loading.textContent = 'Carregando player da Twitch…';
-
-  player.append(host, loading);
+  const iframe = document.createElement('iframe');
+  iframe.src = `https://player.twitch.tv/?${params.toString()}`;
+  iframe.title = `Player Twitch de ${source.username}`;
+  iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+  iframe.allowFullscreen = true;
+  iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+  player.appendChild(iframe);
   renderAccessHelp(player, source);
-
-  try {
-    const Twitch = await loadTwitchSdk();
-    if (version !== mountVersion || !player.isConnected || !Twitch?.Embed) return;
-
-    const embed = new Twitch.Embed(host.id, {
-      width: '100%',
-      height: '100%',
-      channel: source.username,
-      layout: 'video',
-      autoplay: true,
-      muted: true,
-      theme: 'dark',
-      allowfullscreen: true
-    });
-
-    embed.addEventListener(Twitch.Embed.VIDEO_READY, () => loading.remove());
-
-    setTimeout(() => {
-      if (loading.isConnected) {
-        loading.textContent = 'A Twitch pode estar aguardando login ou interação. Use o player ou o botão “Abrir na Twitch” abaixo.';
-      }
-    }, 6000);
-  } catch (error) {
-    console.warn('Não foi possível iniciar o embed completo da Twitch.', error);
-    if (version !== mountVersion || !player.isConnected) return;
-
-    player.innerHTML = '';
-    const fallback = document.createElement('div');
-    fallback.className = 'state player-access-fallback';
-
-    const message = document.createElement('p');
-    message.textContent = 'O player incorporado da Twitch não carregou neste navegador.';
-
-    const link = document.createElement('a');
-    link.className = 'btn btn-primary';
-    link.href = externalLink(source);
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer external';
-    link.referrerPolicy = 'no-referrer';
-    link.textContent = 'Abrir na Twitch';
-
-    fallback.append(message, link);
-    player.appendChild(fallback);
-  }
 }
 
 function setupPlayer(force = false) {
@@ -238,8 +176,6 @@ function setupPlayer(force = false) {
   if (!force && player.dataset.zytrixPlayerSignature === signature) return;
 
   player.dataset.zytrixPlayerSignature = signature;
-  mountVersion += 1;
-  const version = mountVersion;
 
   if (stream.matureContent === true && !matureConfirmed()) {
     renderMatureGate(player, source);
@@ -247,7 +183,7 @@ function setupPlayer(force = false) {
   }
 
   if (source.platform === 'twitch') {
-    renderTwitch(player, source, version);
+    renderTwitch(player, source);
     return;
   }
 
@@ -263,11 +199,12 @@ if (root && streamId) {
   stopStream = onSnapshot(doc(db, 'streams', streamId), snap => {
     if (!snap.exists()) return;
     stream = { id: snap.id, ...snap.data() };
-    setupPlayer(true);
+    // Ignore frequent snapshots that only change viewerCount or presence.
+    setupPlayer();
   }, error => console.warn('Não foi possível acompanhar o player.', error));
 
   observer = new MutationObserver(() => setupPlayer());
-  observer.observe(root, { childList: true, subtree: true });
+  observer.observe(root, { childList: true, subtree: false });
 }
 
 window.addEventListener('pagehide', () => {
