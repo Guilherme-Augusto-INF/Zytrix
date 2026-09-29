@@ -43,7 +43,7 @@ test('contador principal mostra contagem publica transacional da live', async ()
   assert.match(source, /document\.querySelector\('#live-viewer-count'\)/);
   assert.match(source, /stream\.viewerCount/);
   assert.match(source, /watchActiveViewers\(/);
-  assert.match(source, /startViewerPresence\(currentUser\.uid, streamId\)/);
-  assert.match(presence, /runTransaction\(db/);
+  assert.match(source, /startViewerPresence\(identity\.uid, streamId, identity\.db\)/);
+  assert.match(presence, /runTransaction\(presenceDb/);
   assert.match(presence, /tx\.update\(streamRef, \{ viewerCount:/);
 });
