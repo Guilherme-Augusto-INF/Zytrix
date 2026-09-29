@@ -281,12 +281,13 @@ async function save() {
         await updateDoc(doc(db, 'channels', user.uid), {
             categoryId: form.categoryId
         });
-        message.innerHTML = `
-      <div class="message ok">
-        Configurações salvas. Plataforma: ${streamingPlatformLabel(form.source.platform)}.
-      </div>
-    `;
         await load();
+        const status = document.querySelector('#config-msg');
+        if (status) status.innerHTML = `
+          <div class="message ok">
+            Configurações e thumbnail salvas. Plataforma: ${streamingPlatformLabel(form.source.platform)}.
+          </div>
+        `;
     }
     catch (error) {
         console.error(error);
