@@ -371,10 +371,8 @@ async function createStreamer() {
             || savedStream.data().streamerUid !== user.uid) {
             throw new Error('channel-verification-failed');
         }
-        await load();
-        // load() rerenders, so a success message belongs in the new panel.
-        const current = document.querySelector('#streamer-msg');
-        if (current) current.innerHTML = '<div class="message ok">Canal recuperado. Configure sua live.</div>';
+        // The next page loads the persisted channel and stream independently.
+        location.href = 'config-live.html';
     } catch (error) {
         console.error('Erro ao criar/recuperar canal:', error);
         if (error?.code === 'permission-denied') {
