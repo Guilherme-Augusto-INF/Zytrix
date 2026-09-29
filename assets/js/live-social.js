@@ -8,6 +8,7 @@ import {
   onSnapshot
 } from './firebase.js';
 import { escapeHtml } from './ui.js';
+import { getGuestPresenceIdentity } from './guest-presence.js';
 import {
   selectedStreamId,
   isFollowing,
@@ -29,6 +30,7 @@ let stopViewers = null;
 let stopPresence = null;
 let stopStream = null;
 let observer = null;
+let presenceGeneration = 0;
 
 function waitForLiveContent() {
   const root = document.querySelector('#live-root');
@@ -54,14 +56,13 @@ function viewerLabel() {
 }
 
 function syncPrimaryViewerCount() {
-  if (currentUser?.uid !== stream?.streamerUid || activeViewers === null) return;
-
-  const element = document.querySelector('.viewer-panel strong');
-  if (!element) return;
-
-  const count = Math.max(0, Number(activeViewers) || 0);
-  element.textContent = `👁 ${count.toLocaleString('pt-BR')}`;
-  element.dataset.viewerSource = 'zytrix-presence';
+  // The live's public viewerCount is updated atomically along with presence.
+  // Do not replace it with the separate 90-second creator analytics estimate.
+  const element = document.querySelector('#live-viewer-count');
+  if (element && stream) {
+    const count = Math.max(0, Number(stream.viewerCount || 0));
+    element.textContent = `👁 ${count.toLocaleString('pt-BR')}`;
+  }
 }
 
 function renderPanel() {
@@ -165,40 +166,62 @@ async function refreshFollowState() {
 }
 
 async function startPresenceForUser() {
-  stopPresence?.();
-  stopViewers?.();
+  const generation = ++presenceGeneration;
+  const previousPresence = stopPresence;
   stopPresence = null;
+  stopViewers?.();
   stopViewers = null;
   activeViewers = null;
 
-  if (!currentUser || !streamId) {
+  // Wait for the previous presence to close before reopening it, avoiding
+  // reordering increments/decrements during fast tab visibility changes.
+  if (previousPresence) await previousPresence();
+  if (generation !== presenceGeneration) return;
+
+  if (!streamId || !stream || document.visibilityState === 'hidden') {
+    renderPanel();
+    return;
+  }
+
+  if (currentUser.uid === stream.streamerUid) {
+    // The creator is not an audience member, but may see private analytics.
+    stopViewers = watchActiveViewers(
+      streamId,
+      count => {
+        if (generation !== presenceGeneration) return;
+        activeViewers = count;
+        const element = document.querySelector('#zytrix-active-viewers');
+        if (element) element.textContent = count.toLocaleString('pt-BR');
+      },
+      error => console.warn('Não foi possível acompanhar espectadores ativos.', error)
+    );
+    renderPanel();
+    return;
+  }
+
+  if (stream.status !== 'live') {
     renderPanel();
     return;
   }
 
   try {
-    stopPresence = await startViewerPresence(currentUser.uid, streamId);
-
-    if (currentUser.uid !== stream?.streamerUid) {
-      activeViewers = null;
-      renderPanel();
+    // Signed-in users use their primary identity; visitors get an isolated
+    // anonymous Firebase identity solely for presence tracking.
+    const identity = currentUser
+      ? { uid: currentUser.uid, db }
+      : await getGuestPresenceIdentity();
+    if (generation !== presenceGeneration) return;
+    const stop = await startViewerPresence(identity.uid, streamId, identity.db);
+    if (generation !== presenceGeneration) {
+      await stop();
       return;
     }
-
-    stopViewers = watchActiveViewers(
-      streamId,
-      count => {
-        activeViewers = count;
-
-        const element = document.querySelector('#zytrix-active-viewers');
-        if (element) element.textContent = count.toLocaleString('pt-BR');
-
-        syncPrimaryViewerCount();
-      },
-      error => console.warn('Não foi possível acompanhar espectadores ativos.', error)
-    );
+    stopPresence = stop;
+    renderPanel();
   } catch (error) {
-    console.warn('Presença do espectador indisponível.', error);
+    // If Anonymous Auth is disabled in Firebase, guest viewing still works,
+    // but cannot safely contribute to the public counter.
+    console.warn('Presença do espectador indisponível.', error?.code || error);
   }
 }
 
@@ -224,9 +247,13 @@ async function initialize() {
 
   stopStream = onSnapshot(doc(db, 'streams', streamId), streamSnap => {
     if (!streamSnap.exists()) return;
+    const previousStatus = stream?.status;
     stream = { id: streamSnap.id, ...streamSnap.data() };
     renderPanel();
     syncPrimaryViewerCount();
+    if (previousStatus !== stream.status) {
+      startPresenceForUser().catch(error => console.warn('Presença indisponível.', error));
+    }
   });
 
   waitForLiveContent();
@@ -243,7 +270,13 @@ onAuthStateChanged(auth, async user => {
 
 initialize().catch(error => console.warn('Recursos sociais da live indisponíveis.', error));
 
+document.addEventListener('visibilitychange', () => {
+  if (!stream) return;
+  startPresenceForUser().catch(error => console.warn('Falha ao atualizar presença.', error));
+});
+
 window.addEventListener('pagehide', () => {
+  ++presenceGeneration;
   stopFollowers?.();
   stopViewers?.();
   stopPresence?.();

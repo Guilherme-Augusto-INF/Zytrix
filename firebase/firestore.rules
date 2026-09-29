@@ -1855,6 +1855,37 @@ service cloud.firestore {
 
         ||
 
+        // A contagem publica so pode variar quando a mesma transacao
+        // cria/remove a presenca autenticada do proprio espectador.
+        (
+          loggedIn()
+          && !isBanned(request.auth.uid)
+          && request.resource.data.viewerCount is int
+          && resource.data.viewerCount is int
+          && request.resource.data.viewerCount >= 0
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(["viewerCount"])
+          && (
+            (
+              resource.data.status == "live"
+              && request.resource.data.viewerCount == resource.data.viewerCount + 1
+              && !exists(/databases/$(database)/documents/streams/$(streamId)/livePresence/$(request.auth.uid))
+              && existsAfter(/databases/$(database)/documents/streams/$(streamId)/livePresence/$(request.auth.uid))
+              && getAfter(/databases/$(database)/documents/streams/$(streamId)/livePresence/$(request.auth.uid)).data.uid == request.auth.uid
+              && getAfter(/databases/$(database)/documents/streams/$(streamId)/livePresence/$(request.auth.uid)).data.joinedAt == request.time
+            )
+            ||
+            (
+              resource.data.viewerCount >= 1
+              && request.resource.data.viewerCount == resource.data.viewerCount - 1
+              && exists(/databases/$(database)/documents/streams/$(streamId)/livePresence/$(request.auth.uid))
+              && !existsAfter(/databases/$(database)/documents/streams/$(streamId)/livePresence/$(request.auth.uid))
+            )
+          )
+        )
+
+        ||
+
         (
           isAdmin()
 
@@ -3704,6 +3735,60 @@ service cloud.firestore {
         if isAdmin();
     }
 
+
+    // ==================================================
+    // SESSOES DE CONTAGEM (PRIVADAS)
+    // ==================================================
+    // Documento unico por conta e live: reabrir a mesma live nao soma duas vezes.
+    // A escrita do contador e da sessao deve acontecer na mesma transacao.
+    match /streams/{streamId}/livePresence/{viewerUid} {
+      allow get:
+        if isOwner(viewerUid)
+        || isAdmin()
+        || (
+          loggedIn()
+          && get(/databases/$(database)/documents/streams/$(streamId)).data.streamerUid == request.auth.uid
+        );
+
+      allow list:
+        if isAdmin()
+        || (
+          loggedIn()
+          && get(/databases/$(database)/documents/streams/$(streamId)).data.streamerUid == request.auth.uid
+        );
+
+      allow create:
+        if isOwner(viewerUid)
+        && !isBanned(viewerUid)
+        && get(/databases/$(database)/documents/streams/$(streamId)).data.status == "live"
+        && get(/databases/$(database)/documents/streams/$(streamId)).data.streamerUid != viewerUid
+        && request.resource.data.uid == viewerUid
+        && request.resource.data.joinedAt == request.time
+        && request.resource.data.lastSeen == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt >= request.time + duration.value(1, "m")
+        && request.resource.data.expiresAt <= request.time + duration.value(3, "m")
+        && request.resource.data.keys().hasOnly(["uid", "joinedAt", "lastSeen", "expiresAt"])
+        && getAfter(/databases/$(database)/documents/streams/$(streamId)).data.viewerCount
+            == get(/databases/$(database)/documents/streams/$(streamId)).data.viewerCount + 1;
+
+      allow update:
+        if isOwner(viewerUid)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.joinedAt == resource.data.joinedAt
+        && request.resource.data.lastSeen == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt >= request.time + duration.value(1, "m")
+        && request.resource.data.expiresAt <= request.time + duration.value(3, "m")
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["lastSeen", "expiresAt"]);
+
+      allow delete:
+        if isOwner(viewerUid)
+        && get(/databases/$(database)/documents/streams/$(streamId)).data.viewerCount >= 1
+        && getAfter(/databases/$(database)/documents/streams/$(streamId)).data.viewerCount
+            == get(/databases/$(database)/documents/streams/$(streamId)).data.viewerCount - 1;
+    }
 
     // ==================================================
     // PRESENÇA DE ESPECTADORES

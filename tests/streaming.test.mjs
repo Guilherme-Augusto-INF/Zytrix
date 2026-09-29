@@ -35,13 +35,15 @@ test('gera embed oficial do YouTube sem afetar Twitch/Kick', () => {
   assert.equal(parseStreamingSource('https://kick.com/example')?.platform, 'kick');
 });
 
-test('contador principal da live usa presença ativa do Zytrix para o streamer', async () => {
+test('contador principal mostra contagem publica transacional da live', async () => {
   const source = await readFile(new URL('../assets/js/live-social.js', import.meta.url), 'utf8');
+  const presence = await readFile(new URL('../assets/js/social.js', import.meta.url), 'utf8');
 
   assert.match(source, /function syncPrimaryViewerCount\(\)/);
-  assert.match(source, /document\.querySelector\('\.viewer-panel strong'\)/);
-  assert.match(source, /element\.textContent = `👁 \$\{count\.toLocaleString\('pt-BR'\)\}`/);
-  assert.match(source, /syncPrimaryViewerCount\(\);/);
+  assert.match(source, /document\.querySelector\('#live-viewer-count'\)/);
+  assert.match(source, /stream\.viewerCount/);
   assert.match(source, /watchActiveViewers\(/);
-  assert.match(source, /startViewerPresence\(currentUser\.uid, streamId\)/);
+  assert.match(source, /startViewerPresence\(identity\.uid, streamId, identity\.db\)/);
+  assert.match(presence, /runTransaction\(presenceDb/);
+  assert.match(presence, /tx\.update\(streamRef, \{ viewerCount:/);
 });
