@@ -112,19 +112,19 @@ export function watchActiveViewers(streamId, callback, onError = console.error) 
 // Each signed-in account counts once per live. A server-validated Firestore
 // transaction couples the presence document with the publicly visible count.
 // Sudden browser/network termination still needs a server-side expiry sweeper.
-export async function startViewerPresence(uid, streamId) {
+export async function startViewerPresence(uid, streamId, presenceDb = db) {
   if (!uid || !streamId) return async () => {};
 
-  const streamRef = doc(db, 'streams', streamId);
-  const presenceRef = doc(db, 'streams', streamId, 'livePresence', uid);
+  const streamRef = doc(presenceDb, 'streams', streamId);
+  const presenceRef = doc(presenceDb, 'streams', streamId, 'livePresence', uid);
   // Legacy presence remains for watch-progress and creator dashboard features.
-  const legacyRef = doc(db, 'streams', streamId, 'viewers', uid);
+  const legacyRef = doc(presenceDb, 'streams', streamId, 'viewers', uid);
   let active = true;
   let stopped = false;
 
   const expiry = () => Timestamp.fromMillis(Date.now() + 2 * 60 * 1000);
 
-  await runTransaction(db, async tx => {
+  await runTransaction(presenceDb, async tx => {
     const [streamSnap, presenceSnap, legacySnap] = await Promise.all([
       tx.get(streamRef), tx.get(presenceRef), tx.get(legacyRef)
     ]);
@@ -171,7 +171,7 @@ export async function startViewerPresence(uid, streamId) {
     stopped = true;
     clearInterval(timer);
     try {
-      await runTransaction(db, async tx => {
+      await runTransaction(presenceDb, async tx => {
         const [streamSnap, presenceSnap, legacySnap] = await Promise.all([
           tx.get(streamRef), tx.get(presenceRef), tx.get(legacyRef)
         ]);
