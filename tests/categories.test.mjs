@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { categories, icons } from '../assets/js/ui.js';
+import { categories, icons } from '../assets/js/categories-data.js';
 
 test('expanded category catalog has an icon and subcategories for every category', () => {
   const names=Object.keys(categories);

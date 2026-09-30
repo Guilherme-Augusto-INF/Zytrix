@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { IMAGE_LIMITS, mediaStoragePath, validateImageCandidate } from '../assets/js/media-upload.js';
+import { IMAGE_LIMITS, mediaStoragePath, validateImageCandidate } from '../assets/js/media-upload-policy.js';
 
 test('local image upload accepts only supported image types and bounded sizes', () => {
   assert.equal(validateImageCandidate({ type:'image/jpeg', size:1234 },'profile').ok,true);
