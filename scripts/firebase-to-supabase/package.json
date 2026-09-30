@@ -1,0 +1,20 @@
+{
+  "name": "zytrix-firebase-to-supabase-etl",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "export:firestore": "node export-firestore.mjs",
+    "preflight": "node preflight.mjs",
+    "preflight:auth": "node preflight-auth.mjs",
+    "transform": "node transform.mjs",
+    "import": "node import-postgres.mjs",
+    "reconcile": "node reconcile.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "13.4.0",
+    "pg": "8.16.3",
+    "uuid": "13.0.0"
+  }
+}

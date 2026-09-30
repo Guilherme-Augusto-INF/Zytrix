@@ -3,3 +3,7 @@ node_modules/
 .vercel/
 *-debug.log
 .env*
+supabase/.temp/
+migration-data/
+firebase-service.json
+supabase-service.json

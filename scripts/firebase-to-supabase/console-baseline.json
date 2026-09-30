@@ -1,0 +1,17 @@
+{
+  "observedAt": "2026-09-21T00:00:00Z",
+  "firebaseProjectId": "zytrix-ca4f2",
+  "authUserCount": 19,
+  "rootCollectionCounts": {
+    "admins": 1,
+    "channels": 5,
+    "featuredStreamers": 4,
+    "profiles": 20,
+    "streams": 5,
+    "users": 20,
+    "wallets": 8,
+    "zyCoinOrders": 10,
+    "zyCoinTransactions": 0
+  },
+  "firebaseStorageActivated": false
+}
