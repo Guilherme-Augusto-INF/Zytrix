@@ -2,6 +2,7 @@ import { auth, db, googleProvider, onAuthStateChanged, EmailAuthProvider, reauth
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
 import { safeImageUrl } from './security.js';
+import { IMAGE_ACCEPT, uploadPublicImage, imageUploadMessage } from './media-upload.js';
 header();
 footer();
 const root = document.querySelector('#profile-root');
@@ -160,6 +161,17 @@ function render() {
         </div>
 
         <div class="form-group">
+          <label for="edit-photo-file">Ou enviar uma foto do computador</label>
+          <input
+            id="edit-photo-file"
+            class="input file-input"
+            type="file"
+            accept="${IMAGE_ACCEPT}"
+          >
+          <small class="muted">JPG, PNG ou WebP. A Zytrix redimensiona e converte a imagem antes do envio. Limite do arquivo original: 8 MB.</small>
+        </div>
+
+        <div class="form-group">
           <label for="edit-bio">Bio</label>
           <textarea
             id="edit-bio"
@@ -267,13 +279,14 @@ async function saveProfile() {
     const button = document.querySelector('#save-profile');
     const name = document.querySelector('#edit-name').value.trim();
     const rawPhoto = document.querySelector('#edit-photo').value.trim();
-    const photoURL = safeImageUrl(rawPhoto);
+    const photoFile = document.querySelector('#edit-photo-file')?.files?.[0] || null;
+    let photoURL = safeImageUrl(rawPhoto);
     const bio = document.querySelector('#edit-bio').value.trim();
     if (name.length < 2 || name.length > 30) {
         message.textContent = 'O nome deve ter de 2 a 30 caracteres.';
         return;
     }
-    if (rawPhoto && !photoURL) {
+    if (!photoFile && rawPhoto && !photoURL) {
         message.textContent = 'URL da foto não permitida. Use uma imagem HTTPS de Google, Twitch, Kick, YouTube ou Firebase Storage. Links comuns de páginas ou arquivos privados não funcionam.';
         return;
     }
@@ -297,6 +310,10 @@ async function saveProfile() {
     button.disabled = true;
     message.textContent = 'Salvando perfil...';
     try {
+        if (photoFile) {
+            message.textContent = 'Otimizando e enviando a foto...';
+            photoURL = await uploadPublicImage({ uid: user.uid, kind: 'profile', file: photoFile });
+        }
         const profileRef = doc(db, 'profiles', user.uid);
         const data = { photoURL, bio };
         if (changedName) {
@@ -338,11 +355,13 @@ async function saveProfile() {
         if (success) success.innerHTML = '<div class="message ok">Foto e dados de perfil salvos com sucesso.</div>';
     } catch (error) {
         console.error('Falha ao atualizar perfil:', error);
-        message.textContent = error?.code === 'permission-denied'
-            ? 'Alteração recusada. Confira o domínio da imagem e, se estiver alterando o nome, respeite o intervalo de 7 dias.'
-            : error?.code === 'unavailable'
-                ? 'Sem conexão com o banco. Tente novamente.'
-                : 'Não foi possível atualizar o perfil. Tente novamente.';
+        message.textContent = String(error?.code || '').startsWith('storage/') || ['file-too-large','invalid-type','invalid-image','optimized-file-too-large'].includes(error?.code)
+            ? imageUploadMessage(error)
+            : error?.code === 'permission-denied'
+                ? 'Alteração recusada. Confira o domínio da imagem e, se estiver alterando o nome, respeite o intervalo de 7 dias.'
+                : error?.code === 'unavailable'
+                    ? 'Sem conexão com o banco. Tente novamente.'
+                    : 'Não foi possível atualizar o perfil. Tente novamente.';
     } finally {
         if (button.isConnected) button.disabled = false;
     }

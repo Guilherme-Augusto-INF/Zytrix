@@ -2,6 +2,7 @@ import { auth, db, onAuthStateChanged, doc, getDoc, getDocs, query, collection, 
 import { header, footer, categories, escapeAttr, escapeHtml } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
 import { safeImageUrl } from './security.js';
+import { IMAGE_ACCEPT, uploadPublicImage, imageUploadMessage } from './media-upload.js';
 import { SUPPORT_ALERT_SOUNDS, normalizeSupportAlertSound, playSupportAlertSound, unlockSupportAlertAudio } from './support-alert-sound.js';
 header();
 footer();
@@ -84,6 +85,17 @@ function render() {
               autocomplete="url"
             >
             <small class="muted">Informe uma URL HTTPS direta de imagem pública de um provedor compatível: Google, YouTube, Twitch, Kick ou Firebase Storage.</small>
+          </div>
+
+          <div class="form-group">
+            <label for="thumbnail-file">Ou enviar uma thumbnail do computador</label>
+            <input
+              id="thumbnail-file"
+              class="input file-input"
+              type="file"
+              accept="${IMAGE_ACCEPT}"
+            >
+            <small class="muted">JPG, PNG ou WebP. A imagem é redimensionada para até 1920×1080 e convertida antes do envio. Limite do arquivo original: 12 MB.</small>
           </div>
 
           <div class="form-group">
@@ -228,8 +240,9 @@ function collectForm({ requireSubcategory = false } = {}) {
     const title = document.querySelector('#title').value.trim();
     const description = document.querySelector('#description').value.trim();
     const rawThumbnail = document.querySelector('#thumbnail').value.trim();
+    const thumbnailFile = document.querySelector('#thumbnail-file')?.files?.[0] || null;
     const thumbnailURL = safeImageUrl(rawThumbnail);
-    if (rawThumbnail && !thumbnailURL) {
+    if (!thumbnailFile && rawThumbnail && !thumbnailURL) {
         return {
             error: 'Thumbnail inválida: use uma URL HTTPS direta de imagem pública de Google, YouTube, Twitch, Kick ou Firebase Storage. Links de sites arbitrários não são permitidos.'
         };
@@ -253,6 +266,7 @@ function collectForm({ requireSubcategory = false } = {}) {
         title,
         description,
         thumbnailURL,
+        thumbnailFile,
         category,
         categoryId: subcategory ? `${category} - ${subcategory}` : category,
         playbackURL: source.canonicalUrl,
@@ -261,6 +275,13 @@ function collectForm({ requireSubcategory = false } = {}) {
         source
     };
 }
+
+async function resolveThumbnail(form, message) {
+    if (!form.thumbnailFile) return form.thumbnailURL;
+    if (message) message.innerHTML = '<div class="message">Otimizando e enviando thumbnail...</div>';
+    return uploadPublicImage({ uid: user.uid, kind: 'thumbnail', streamId: stream.id, file: form.thumbnailFile });
+}
+
 async function save() {
     const message = document.querySelector('#config-msg');
     const form = collectForm();
@@ -269,10 +290,11 @@ async function save() {
         return;
     }
     try {
+        const thumbnailURL = await resolveThumbnail(form, message);
         await updateDoc(doc(db, 'streams', stream.id), {
             title: form.title,
             description: form.description,
-            thumbnailURL: form.thumbnailURL,
+            thumbnailURL,
             categoryId: form.categoryId,
             playbackURL: form.playbackURL,
             supportAlertSound: form.supportAlertSound,
@@ -291,9 +313,11 @@ async function save() {
     }
     catch (error) {
         console.error(error);
-        message.innerHTML = error?.code === 'permission-denied'
-            ? '<div class="message err">O banco recusou as configurações. Verifique o domínio da thumbnail e as permissões de streamer.</div>'
-            : '<div class="message err">Não foi possível salvar. Verifique a conexão e tente novamente.</div>';
+        message.innerHTML = String(error?.code || '').startsWith('storage/') || ['file-too-large','invalid-type','invalid-image','optimized-file-too-large'].includes(error?.code)
+            ? `<div class="message err">${escapeHtml(imageUploadMessage(error))}</div>`
+            : error?.code === 'permission-denied'
+                ? '<div class="message err">O banco recusou as configurações. Verifique o domínio da thumbnail e as permissões de streamer.</div>'
+                : '<div class="message err">Não foi possível salvar. Verifique a conexão e tente novamente.</div>';
     }
 }
 async function toggle() {
@@ -305,12 +329,13 @@ async function toggle() {
         return;
     }
     try {
+        const thumbnailURL = await resolveThumbnail(form, message);
         const batch = writeBatch(db);
         batch.update(doc(db, 'streams', stream.id), starting
             ? {
                 title: form.title,
                 description: form.description,
-                thumbnailURL: form.thumbnailURL,
+                thumbnailURL,
                 categoryId: form.categoryId,
                 playbackURL: form.playbackURL,
                 supportAlertSound: form.supportAlertSound,
@@ -322,7 +347,7 @@ async function toggle() {
             : {
                 title: form.title,
                 description: form.description,
-                thumbnailURL: form.thumbnailURL,
+                thumbnailURL,
                 categoryId: form.categoryId,
                 playbackURL: form.playbackURL,
                 supportAlertSound: form.supportAlertSound,
@@ -340,9 +365,11 @@ async function toggle() {
     }
     catch (error) {
         console.error(error);
-        message.innerHTML = error?.code === 'permission-denied'
-            ? '<div class="message err">O banco recusou a atualização. Verifique a thumbnail, o e-mail verificado e suas permissões.</div>'
-            : '<div class="message err">Não foi possível alterar o status. Tente novamente.</div>';
+        message.innerHTML = String(error?.code || '').startsWith('storage/') || ['file-too-large','invalid-type','invalid-image','optimized-file-too-large'].includes(error?.code)
+            ? `<div class="message err">${escapeHtml(imageUploadMessage(error))}</div>`
+            : error?.code === 'permission-denied'
+                ? '<div class="message err">O banco recusou a atualização. Verifique a thumbnail, o e-mail verificado e suas permissões.</div>'
+                : '<div class="message err">Não foi possível alterar o status. Tente novamente.</div>';
     }
 }
 onAuthStateChanged(auth, currentUser => {
