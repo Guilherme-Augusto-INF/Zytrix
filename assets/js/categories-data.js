@@ -4,7 +4,7 @@ export const categories = {
     'Just Chatting': ['Bate-Papo', 'Perguntas e Respostas', 'Histórias', 'Desafios', 'React', 'Debates', 'Comédia', 'Comunidade'],
     Criatividade: ['Desenho', 'Design', 'Fotografia', 'Edição', 'Animação', '3D', 'Artesanato', 'Escrita', 'Moda', 'Produção Criativa'],
     Esportes: ['Futebol', 'Basquete', 'Vôlei', 'Automobilismo', 'Lutas', 'Skate', 'Ciclismo', 'Corrida', 'Fitness', 'Esportes Radicais'],
-    Tecnologia: ['Programação', 'Hardware', 'Inteligência Artificial', 'Cibersegurança', 'Linux e Open Source', 'Robótica', 'Ciência de Dados', 'Desenvolvimento de Jogos', 'Notícias Tech', 'DevOps'],
+    Tecnologia: ['Programação', 'Hardware', 'Inteligência Artificial', 'Ciência e Tech', 'Cibersegurança', 'Linux e Open Source', 'Robótica', 'Ciência de Dados', 'Desenvolvimento de Jogos', 'Notícias Tech', 'DevOps'],
     Podcasts: ['Conversas', 'Entrevistas', 'Notícias', 'Entretenimento', 'Educação', 'Esportes', 'Tecnologia', 'Cultura'],
     IRL: ['Viagens', 'Eventos', 'Vida Cotidiana', 'Exploração', 'Bastidores', 'Compras', 'Natureza', 'Gastronomia'],
     Educação: ['Matemática', 'Física', 'Química', 'Biologia', 'História', 'Geografia', 'Idiomas', 'Vestibular e ENEM', 'Programação', 'Estudo ao Vivo'],

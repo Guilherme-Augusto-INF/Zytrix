@@ -18,3 +18,7 @@ test('core existing categories remain available', () => {
     assert.ok(categories[name]);
   }
 });
+
+test('legacy Tecnologia subcategory remains selectable for existing lives', () => {
+  assert.ok(categories.Tecnologia.includes('Ciência e Tech'));
+});

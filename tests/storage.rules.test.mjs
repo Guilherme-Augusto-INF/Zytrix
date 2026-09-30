@@ -2,7 +2,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { getBytes, ref, uploadBytes } from 'firebase/storage';
+import { deleteObject, getBytes, ref, uploadBytes } from 'firebase/storage';
 
 let env;
 const bytes = (size = 32) => new Uint8Array(size).fill(1);
@@ -41,4 +41,40 @@ test('published profile images are readable without authentication', async () =>
 test('profile output size is capped by Storage rules', async () => {
   const target = ref(env.authenticatedContext('large-user').storage(), 'public/profiles/large-user/avatar.webp');
   await assertFails(uploadBytes(target, bytes(2 * 1024 * 1024 + 1), { contentType: 'image/webp' }));
+});
+
+for (const [kind, path, maximum] of [
+  ['profile', 'public/profiles/security-owner/avatar.webp', 2 * 1024 * 1024],
+  ['thumbnail', 'public/thumbnails/security-owner/live/thumbnail.webp', 5 * 1024 * 1024]
+]) {
+  test(`${kind}: public read, owner update/delete, attacker and anonymous denial, exact size boundary`, async () => {
+    const owner = ref(env.authenticatedContext('security-owner').storage(), path);
+    const attacker = ref(env.authenticatedContext('security-attacker').storage(), path);
+    const anonymous = ref(env.unauthenticatedContext().storage(), path);
+    await assertSucceeds(uploadBytes(owner, bytes(maximum), { contentType: 'image/webp' }));
+    await assertFails(uploadBytes(owner, bytes(maximum + 1), { contentType: 'image/webp' }));
+    await assertFails(uploadBytes(owner, bytes(0), { contentType: 'image/webp' }));
+    await assertFails(uploadBytes(owner, bytes(), { contentType: 'image/jpeg' }));
+    await assertFails(uploadBytes(attacker, bytes(), { contentType: 'image/webp' }));
+    await assertFails(uploadBytes(anonymous, bytes(), { contentType: 'image/webp' }));
+    await assertFails(deleteObject(attacker));
+    await assertFails(deleteObject(anonymous));
+    await assertSucceeds(uploadBytes(owner, bytes(), { contentType: 'image/webp' }));
+    assert.equal((await assertSucceeds(getBytes(anonymous))).byteLength, 32);
+    await assertSucceeds(deleteObject(owner));
+  });
+}
+
+test('all other paths deny reads and writes even to an authenticated user', async () => {
+  const paths = ['private/security-owner/file.webp', 'public/profiles/security-owner/other.webp', 'public/thumbnails/security-owner/live/other.webp'];
+  await env.withSecurityRulesDisabled(async context => {
+    for (const path of paths) await uploadBytes(ref(context.storage(), path), bytes(), { contentType: 'image/webp' });
+  });
+  for (const path of paths) {
+    const owner = ref(env.authenticatedContext('security-owner').storage(), path);
+    await assertFails(getBytes(owner));
+    await assertFails(getBytes(ref(env.unauthenticatedContext().storage(), path)));
+    await assertFails(uploadBytes(owner, bytes(), { contentType: 'image/webp' }));
+    await assertFails(deleteObject(owner));
+  }
 });
