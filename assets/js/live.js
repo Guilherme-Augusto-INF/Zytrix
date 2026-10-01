@@ -26,6 +26,9 @@ let currentChatBan = null;
 let banUnsubscribe = null;
 let pinnedUnsubscribe = null;
 let pinnedMessageId = '';
+// Viewer-count updates must not reconstruct the iframe, chat or user input.
+let lastLiveLayoutSignature = '';
+let liveSnapshotVersion = 0;
 const roleCache = new Map();
 const profileCache = new Map();
 // ==================================================
@@ -210,7 +213,7 @@ function render() {
 
             <div class="viewer-panel">
               <span class="muted" style="font-size:10px">ESPECTADORES</span>
-              <strong>👁 ${Number(stream.viewerCount || 0).toLocaleString('pt-BR')}</strong>
+              <strong id="live-viewer-count">👁 ${Math.max(0, Number(stream.viewerCount || 0)).toLocaleString('pt-BR')}</strong>
             </div>
           </div>
         </div>
@@ -676,16 +679,35 @@ if (!streamId) {
 }
 else {
     onSnapshot(doc(db, 'streams', streamId), async (snap) => {
+        const version = ++liveSnapshotVersion;
         if (!snap.exists()) {
+            lastLiveLayoutSignature = '';
             root.innerHTML = '<div class="state">Live não encontrada.</div>';
             return;
         }
-        stream = { id: snap.id, ...snap.data() };
-        streamerProfile = stream.streamerUid
-            ? await getCachedProfile(stream.streamerUid)
+        const nextStream = { id: snap.id, ...snap.data() };
+        const nextProfile = nextStream.streamerUid
+            ? await getCachedProfile(nextStream.streamerUid)
             : null;
+        if (version !== liveSnapshotVersion) return;
+        stream = nextStream;
+        streamerProfile = nextProfile;
+        // Do not interrupt playback on presence/viewer-count or timestamp changes.
+        const layoutSignature = JSON.stringify([
+            stream.id, stream.streamerUid, stream.playbackURL, stream.status,
+            stream.categoryId, stream.title, stream.description,
+            nextProfile?.username, nextProfile?.photoURL
+        ]);
+        if (layoutSignature === lastLiveLayoutSignature) {
+            const counter = document.querySelector('#live-viewer-count');
+            if (counter) counter.textContent = '👁 ' + Math.max(0, Number(stream.viewerCount || 0)).toLocaleString('pt-BR');
+            updateChatComposerState();
+            return;
+        }
+        lastLiveLayoutSignature = layoutSignature;
         render();
-    }, () => {
+    }, error => {
+        console.error('Erro ao carregar live:', error);
         root.innerHTML = '<div class="state">Erro ao carregar live.</div>';
     });
 }
