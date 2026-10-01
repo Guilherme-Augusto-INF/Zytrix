@@ -10,7 +10,7 @@ export function resolveSafePreviewPath(root, pathname) {
   if (!decoded.startsWith('/') || decoded.includes('\\') || decoded.includes(String.fromCharCode(0)) || decoded.includes('%')
       || decoded.includes('//')) return null;
   if (decoded === '/') decoded = '/index.html';
-  if (/^\/(termos|privacidade|politicas|diretrizes-da-comunidade|denuncias-e-moderacao|conteudo-proibido)$/.test(decoded)) decoded += '.html';
+  if (/^\/(termos|privacidade|politicas|diretrizes-da-comunidade|denuncias-e-moderacao|conteudo-proibido|denunciar|moderacao)$/.test(decoded)) decoded += '.html';
   if (/^\/[a-z0-9-]+\.html$/.test(decoded)) return resolve(root,'.'+decoded);
   if (!decoded.startsWith('/assets/')) return null;
   const assetsRoot = resolve(root,'assets');

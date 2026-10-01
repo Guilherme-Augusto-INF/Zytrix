@@ -10,7 +10,7 @@ test('local staging preview serves original V1 HTML screens and assets',()=>{
     assert.equal(resolveSafePreviewPath(root,'/'+page+'.html'),resolve(root,page+'.html'));
   assert.equal(resolveSafePreviewPath(root,'/staging-validation.html'),resolve(root,'staging-validation.html'));
   assert.equal(resolveSafePreviewPath(root,'/staging.html'),resolve(root,'staging.html'));
-  for(const page of ['termos','privacidade','politicas','diretrizes-da-comunidade','denuncias-e-moderacao','conteudo-proibido'])
+  for(const page of ['termos','privacidade','politicas','diretrizes-da-comunidade','denuncias-e-moderacao','conteudo-proibido','denunciar','moderacao'])
     assert.equal(resolveSafePreviewPath(root,'/'+page),resolve(root,page+'.html'));
   assert.equal(resolveSafePreviewPath(root,'/assets/js/staging-validation.js'),
     resolve(root,'assets/js/staging-validation.js'));
