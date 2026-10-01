@@ -1,4 +1,4 @@
-import { storage, storageRef, uploadBytes, getDownloadURL } from './firebase.js';
+import { storage, storageRef, uploadBytesResumable, getDownloadURL } from './firebase.js';
 import { IMAGE_LIMITS, mediaStoragePath, validateImageCandidate } from './media-upload-policy.js';
 export { IMAGE_ACCEPT, IMAGE_LIMITS, mediaStoragePath, validateImageCandidate } from './media-upload-policy.js';
 
@@ -56,16 +56,61 @@ export async function optimizeImage(file, kind = 'profile') {
   return blob;
 }
 
+function uploadWithTimeout(reference, blob, metadata, timeoutMs = 20000) {
+  return new Promise((resolve, reject) => {
+    const task = uploadBytesResumable(reference, blob, metadata);
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      task.cancel();
+      const error = new Error('upload-timeout');
+      error.code = 'upload-timeout';
+      reject(error);
+    }, timeoutMs);
+
+    task.on('state_changed',
+      () => {},
+      error => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      },
+      () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(task.snapshot.ref);
+      }
+    );
+  });
+}
+
+function promiseWithTimeout(promise, timeoutMs, code) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const error = new Error(code);
+      error.code = code;
+      reject(error);
+    }, timeoutMs);
+    Promise.resolve(promise).then(
+      value => { clearTimeout(timer); resolve(value); },
+      error => { clearTimeout(timer); reject(error); }
+    );
+  });
+}
+
 export async function uploadPublicImage({ uid, kind, streamId = '', file }) {
-  const blob = await optimizeImage(file, kind);
+  const blob = await promiseWithTimeout(optimizeImage(file, kind), 12000, 'image-processing-timeout');
   const path = mediaStoragePath({ uid, kind, streamId });
   const reference = storageRef(storage, path);
-  await uploadBytes(reference, blob, {
+  const uploadedRef = await uploadWithTimeout(reference, blob, {
     contentType: 'image/webp',
     cacheControl: 'public,max-age=3600',
     customMetadata: { ownerUid: String(uid), kind }
   });
-  return getDownloadURL(reference);
+  return promiseWithTimeout(getDownloadURL(uploadedRef), 10000, 'download-url-timeout');
 }
 
 export function imageUploadMessage(error) {
@@ -75,6 +120,11 @@ export function imageUploadMessage(error) {
   if (code.includes('invalid-image')) return 'O arquivo não parece ser uma imagem válida.';
   if (code.includes('storage/unauthorized')) return 'Você não tem permissão para enviar esta imagem.';
   if (code.includes('storage/canceled')) return 'Envio cancelado.';
+  if (code.includes('upload-timeout')) return 'O Firebase Storage não respondeu ao envio em 20 segundos. Verifique se o Storage está ativado e se as regras foram publicadas.';
+  if (code.includes('image-processing-timeout')) return 'A imagem demorou demais para ser processada. Tente uma imagem menor.';
+  if (code.includes('download-url-timeout')) return 'A imagem foi enviada, mas o Firebase não retornou a URL. Recarregue a página e tente novamente.';
+  if (code.includes('storage/bucket-not-found')) return 'O bucket do Firebase Storage não foi encontrado. Confira a configuração do projeto.';
+  if (code.includes('storage/project-not-found')) return 'O projeto do Firebase Storage não foi encontrado.';
   if (code.includes('storage/retry-limit-exceeded')) return 'O envio demorou demais. Tente novamente.';
   return 'Não foi possível enviar a imagem.';
 }
