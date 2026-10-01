@@ -19,5 +19,8 @@ test('managed account disabled during dual-proof verification cannot link',async
 test('Firebase enrollment proof rejects a revoked or disabled old identity',async()=>{
  const {readFile}=await import('node:fs/promises');const source=(await readFile(new URL('../server/neon/auth.mjs',import.meta.url),'utf8')).replace(/^import .+;\r?\n/gm,'').replaceAll('export async function','async function');
  let revoked=false;const verify=new Function('getApps','initializeApp','getAuth',source+';return verifyFirebaseToken;')(()=>[{name:'zytrix-token-verifier'}],()=>assert.fail('Unexpected app initialization'),()=>({async verifyIdToken(token,checkRevoked){assert.equal(checkRevoked,true);if(revoked)throw Error('auth/id-token-revoked');return {uid:'old-identity',email_verified:true,auth_time:1,exp:2,firebase:{sign_in_provider:'password'}};}}));
- assert.equal((await verify('proof')).uid,'old-identity');revoked=true;assert.equal(await verify('proof'),null);
+ const loader=async()=>({getApps:()=>[{name:'zytrix-token-verifier'}],getAuth:()=>({async verifyIdToken(token,checkRevoked){assert.equal(checkRevoked,true);if(revoked)throw Error('auth/id-token-revoked');return {uid:'old-identity',email_verified:true,auth_time:1,exp:2,firebase:{sign_in_provider:'password'}};}})});
+ assert.equal((await verify('proof',loader)).uid,'old-identity');revoked=true;assert.equal(await verify('proof',loader),null);
+ assert.equal(await verify('proof',async()=>{throw Error('bridge dependency unavailable');}),null);
+ assert.doesNotMatch(await readFile(new URL('../server/neon/auth.mjs',import.meta.url),'utf8'),/^import .*firebase-admin/m);
 });

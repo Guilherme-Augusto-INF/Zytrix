@@ -1,5 +1,3 @@
-import { getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
 import {authBase,verifyNeonToken} from './neon-token.mjs';
 import {platformPool} from './platform-pool.mjs';
 
@@ -19,12 +17,18 @@ export async function authenticate(req) {
   if (process.env.ZYTRIX_AUTH_PROVIDER === 'neon' || process.env.ZYTRIX_NEON_AUTH_URL) return null;
   return verifyFirebaseToken(value.slice(7));
 }
-export async function verifyFirebaseToken(value) {
+export async function verifyFirebaseToken(value, loadAdmin = async () => {
+  const [app, auth] = await Promise.all([import('firebase-admin/app'), import('firebase-admin/auth')]);
+  return { ...app, ...auth };
+}) {
   // Do not accept emulator tokens in a deployed application.
   if (process.env.FIREBASE_AUTH_EMULATOR_HOST) throw new Error('auth_configuration_invalid');
-  const app = getApps().find(app => app.name === 'zytrix-token-verifier')
-    ?? initializeApp({ projectId: 'zytrix-ca4f2' }, 'zytrix-token-verifier');
   try {
+    // Load the temporary Firebase bridge only when dual proof actually needs it.
+    // Its CommonJS dependencies must not prevent Neon-only functions from starting.
+    const { getApps, initializeApp, getAuth } = await loadAdmin();
+    const app = getApps().find(app => app.name === 'zytrix-token-verifier')
+      ?? initializeApp({ projectId: 'zytrix-ca4f2' }, 'zytrix-token-verifier');
     // Signature/issuer/audience/expiry plus revocation and disabled-user status.
     // The enrollment bridge fails closed without authorized Auth read credentials.
     const token = await getAuth(app).verifyIdToken(value,true);
