@@ -43,7 +43,15 @@ try{
  assert.equal((await webhook(event)).replayed,true);checks.push('processed-order and event replay do not alter ledger');
  const refund={id:'evt_'+randomUUID(),livemode:false,type:'charge.refunded',data:{object:{id:'ch_'+randomUUID(),payment_intent:intent,livemode:false,currency:'brl',amount:490,amount_refunded:490}}};
  const refunded=await Promise.all([webhook(refund),webhook(refund)]);assert.equal(refunded.filter(x=>x.refunded).length,1);assert.equal((await admin.query('select balance from public.wallets where user_id=$1',[people[0]])).rows[0].balance,'5');checks.push('full refund concurrent replay is atomic and nonnegative');
- assert.equal((await admin.query('select count(*)::int as n from public.zy_coin_transactions where order_id=$1',[order])).rows[0].n,2);status='PASS';
+ assert.equal((await admin.query('select count(*)::int as n from public.zy_coin_transactions where order_id=$1',[order])).rows[0].n,2);
+ for(const kind of ['partial','spent']){
+  const oid=randomUUID(),sid='cs_test_'+randomUUID(),pi='pi_'+randomUUID();await admin.query("insert into public.zy_coin_orders(id,user_id,package_id,coins,price_cents,payment_method,mode,idempotency_key,provider_reference) values($1,$2,'zy100',100,490,'card','payment_provider',$3,$4)",[oid,people[0],'sandbox-checkout:'+randomUUID(),sid]);const paid={...event,id:'evt_'+randomUUID(),data:{object:{...event.data.object,id:sid,payment_intent:pi,client_reference_id:oid,metadata:{zytrixOrderId:oid}}}};await webhook(paid);
+  const refundEvent={...refund,id:'evt_'+randomUUID(),data:{object:{...refund.data.object,id:'ch_'+randomUUID(),payment_intent:pi,amount_refunded:kind==='partial'?100:490}}};
+  await assert.rejects(webhook({...refundEvent,id:event.id}),e=>e.code==='event_conflict');checks.push(kind+' refund cannot reuse another order event identity');
+  if(kind==='spent'){const balance=BigInt((await admin.query('select balance from public.wallets where user_id=$1',[people[0]])).rows[0].balance);await operation(0,Number(balance-5n),randomUUID());}
+  const balance=(await admin.query('select balance from public.wallets where user_id=$1',[people[0]])).rows[0].balance;assert.deepEqual(await webhook(refundEvent),{reviewRequired:true});assert.equal((await webhook(refundEvent)).replayed,true);assert.equal((await admin.query('select balance from public.wallets where user_id=$1',[people[0]])).rows[0].balance,balance);assert.equal((await admin.query('select count(*)::int as n from public.zy_coin_transactions where order_id=$1',[oid])).rows[0].n,1);checks.push(kind+' refund enters review without coin deletion/negative balance; replay safe');
+ }
+ status='PASS';
 }catch(error){console.log(JSON.stringify({status:'FAIL',code:error.code??error.name}));process.exitCode=1;}
 finally{
  await admin.query('rollback').catch(()=>{});

@@ -55,6 +55,8 @@ async function refundSandboxEvent(c,event){
  const order=(await c.query('select * from public.zy_coin_orders where provider_payment_intent=$1 for update',[charge.payment_intent])).rows[0];
  if(!order||!order.idempotency_key.startsWith('sandbox-checkout:'))throw new ApiError('order_not_found',404);
  if(charge.amount!==order.price_cents||charge.amount_refunded>order.price_cents)throw new ApiError('payment_mismatch',409);
+ const seen=(await c.query('select order_id from private.payment_events where event_id=$1',[event.id])).rows[0];
+ if(seen&&seen.order_id!==order.id)throw new ApiError('event_conflict',409);
  const prior=(await c.query('select order_id from private.payment_refunds where charge_id=$1',[charge.id])).rows[0];
  if(prior){if(prior.order_id!==order.id)throw new ApiError('event_conflict',409);return {replayed:true};}
  if(order.status!=='paid')throw new ApiError('order_not_paid',409);
