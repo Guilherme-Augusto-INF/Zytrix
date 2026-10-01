@@ -11,3 +11,5 @@ document.querySelector('#logout-btn').onclick = async () => { try {
 catch {
     msg.innerHTML = '<div class="message err">Não foi possível sair.</div>';
 } };
+
+document.querySelector('#logout-btn').disabled=false;

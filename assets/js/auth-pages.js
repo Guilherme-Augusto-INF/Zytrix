@@ -108,3 +108,6 @@ googleButton?.addEventListener('click', async () => {
 });
 
 }
+
+// Enable only after backend selection and both submit/OAuth handlers are installed.
+for(const button of document.querySelectorAll('[data-auth-pending]'))button.disabled=false;

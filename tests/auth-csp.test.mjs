@@ -16,3 +16,13 @@ test('CSP continua restrita e não libera firebaseapp.com globalmente', () => {
   assert.match(csp, /object-src 'none'/);
   assert.match(csp, /frame-ancestors 'none'/);
 });
+
+
+test('auth forms fail closed before asynchronous backend initialization and never use GET for credentials',()=>{
+ for(const name of ['login.html','registro.html','recuperar-senha.html']){
+  const html=readFileSync(name,'utf8');assert.match(html,/<form method="post"[^>]*data-auth-form/);
+  const buttons=[...html.matchAll(/<button\b[^>]*>/g)].map(x=>x[0]);assert.ok(buttons.length>0);assert.ok(buttons.every(x=>/data-auth-pending/.test(x)&&/\bdisabled\b/.test(x)));
+ }
+ const source=readFileSync('assets/js/auth-pages.js','utf8');assert.ok(source.lastIndexOf('button.disabled=false')>source.lastIndexOf("addEventListener('click'"));
+ assert.match(readFileSync('sair.html','utf8'),/id="logout-btn" disabled/);
+});
