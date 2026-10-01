@@ -31,3 +31,10 @@ test('staging polling reports errors without opening a legacy listener',async()=
  const stop=source.watch({neon:async()=>{throw Error('unavailable');},firebase:()=>{throw Error('Unexpected Firebase');},onData:()=>assert.fail(),onError:e=>error=e});
  await stop.ready;stop();assert.equal(error.message,'unavailable');
 });
+
+test('unconfigured hosted Preview refuses Firebase fallback while production compatibility stays intact',async()=>{
+ const {default:handler}=await import('../api/v1/config.js');const keys=['VERCEL_ENV','ZYTRIX_POSTGRES_STAGING','ZYTRIX_STAGING_DATABASE_URL','ZYTRIX_AUTH_PROVIDER','ZYTRIX_NEON_AUTH_URL'],previous=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
+ const call=()=>{const r={setHeader(){},status(n){this.code=n;return this;},json(v){this.value=v;return this;}};handler({method:'GET'},r);return r;};
+ try{for(const k of keys)delete process.env[k];process.env.VERCEL_ENV='preview';assert.equal(call().code,503);process.env.ZYTRIX_POSTGRES_STAGING='true';process.env.ZYTRIX_STAGING_DATABASE_URL='fixture-not-used';assert.equal(call().code,503);process.env.VERCEL_ENV='production';assert.equal(call().code,200);assert.equal(call().value.postgresStaging,false);assert.equal(call().value.authentication,'firebase');}
+ finally{for(const [k,v]of Object.entries(previous)){if(v===undefined)delete process.env[k];else process.env[k]=v;}}
+});
