@@ -34,6 +34,8 @@ No newer profile, identity, wallet or ledger data was overwritten. Integration f
 | Webhook/fulfillment | PASS locally | Existing signature tests plus simulated sandbox PostgreSQL credit; wrong amount denied, retry credits once |
 | Original-screen browser smoke | PASS, public scope | Home/Explore load actual Neon live; 16 category cards; Clips loads an empty feed; original login form and error handling work |
 | Google OAuth | BLOCKED | Local INVALID_CALLBACKURL fixed; Google then returned redirect_uri_mismatch for Neon's shared regional callback |
+| GitHub Neon Migration Checks at f62e873 | PASS | 55/55 tests, site check, 5/5 migration tests; [run](https://github.com/Guilherme-Augusto-INF/Zytrix/actions/runs/36809131302) |
+| Vercel preview at f62e873 | PASS | Preview build/deployment status; authenticated hosted staging not certified |
 | Firebase CLI | BLOCKED | No authorized accounts; no source export/reconciliation performed |
 
 The initial broad battery was run once. Specific failures were corrected and retested: PostgreSQL bigint expectations, members.created_at, creator_attributions.creator_code, fixture VOD expectation, the login message function scope, and snapshot comparison of data. No current test failure is left in the executed scope.
@@ -47,3 +49,5 @@ Read-only staging query: **22 internal identities, eight wallets, zero Neon Auth
 The Sept 26 evidence (328 imported rows / 17 populated tables from 295 Firestore documents, 22 Auth accounts, and an unapplied delta of two new/two changed documents) is historical, not fresh certification. Old PaymentIntent/audit/timing results were not rerun or claimed as current evidence.
 
 Remaining: account deletion lifecycle; configured authoritative policies/reports/signup; real managed Auth verification, reset, logout/account switch and dual-proof links; working staging Google OAuth credentials/callback; current source reconciliation; actual Stripe sandbox Checkout and signed webhook delivery; authenticated original-screen smoke. See MODULE-AUDIT.md, AUTH-TRANSITION.md and CUTOVER-ROLLBACK.md.
+
+CI follow-up: the pre-existing patch-firestore-security.yml was invalid YAML at line 29 and failed before starting any job. Its obsolete repository-rules patch automation was preserved byte-for-byte as patch-firestore-security.yml.disabled. No Firestore rules were edited or deployed. PR #11 still reports mergeable_state=dirty; integration of the current base must be reviewed before a future merge/cutover.
