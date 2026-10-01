@@ -55,7 +55,13 @@ async function replaceSession(path,data){generation++;await authRequest(path,dat
 export async function signInWithEmailAndPassword(_auth,email,password){return replaceSession('sign-in/email',{email,password});}
 export async function createUserWithEmailAndPassword(_auth,email,password){return replaceSession('sign-up/email',{email,password,name:email.split('@')[0]});}
 export async function signInWithPopup(){const result=await authRequest('sign-in/social',{provider:'google',callbackURL:new URL('login.html',location.href).href});if(result.url){localStorage.removeItem('zytrixNeonSignedOut');location.assign(result.url);}throw Error('oauth_redirect');}
-export async function signOut(){try{if(auth.currentUser)await platform('auth.logout');}finally{generation++;localStorage.setItem('zytrixNeonSignedOut','true');auth.currentUser=null;loaded=true;notify();changes?.postMessage('changed');await authRequest('sign-out',{});}}
+export async function signOut(){
+ try{if(auth.currentUser)await platform('auth.logout');}
+ catch(error){if(!['authentication_required','account_disabled'].includes(error.code))throw error;}
+ finally{generation++;localStorage.setItem('zytrixNeonSignedOut','true');auth.currentUser=null;jwtCache=null;loaded=true;notify();changes?.postMessage('changed');
+  try{await authRequest('sign-out',{});}catch(error){if(error.status!==401)throw error;}
+ }
+}
 export async function sendEmailVerification(user){await authRequest('email-otp/send-verification-otp',{email:user.email,type:'email-verification'});}
 export async function sendPasswordResetEmail(_auth,email){await authRequest('request-password-reset',{email,redirectTo:new URL('recuperar-senha.html',location.href).href});}
 export async function reauthenticateWithCredential(_user,credential){return signInWithEmailAndPassword(auth,credential.email,credential.password);}

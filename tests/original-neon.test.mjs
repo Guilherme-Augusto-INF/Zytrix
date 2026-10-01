@@ -8,13 +8,13 @@ test('disabled or deleted managed subjects cannot enroll or link using an unexpi
  for(const action of ['account.register','auth.identity','auth.link'])
   await assert.rejects(executePlatform(missing,identity,action,{}),e=>e.code==='account_disabled'&&e.status===403);
 });
-async function authAdapter(fetchImpl){
+async function authAdapter(fetchImpl,platformImpl=async()=>({uid:'preserved',enrollmentRequired:false})){
  const source=(await readFile(new URL('../assets/js/neon-browser.js',import.meta.url),'utf8'))
   .replace(/^import .*;$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:class|function|const))/g,'');
  const context=vm.createContext({console,AbortSignal,URL,atob,queueMicrotask,fetch:fetchImpl,
-  localStorage:{getItem:()=>null,removeItem(){}},BroadcastChannel:undefined,
-  createPlatformClient:()=>async()=>({uid:'preserved',enrollmentRequired:false}),watchRealtime:()=>()=>{}});
- vm.runInContext(source+'\nglobalThis.adapter={auth,refreshSession,signInWithEmailAndPassword};',context);
+  localStorage:{getItem:()=>null,removeItem(){},setItem(){}},BroadcastChannel:undefined,
+  createPlatformClient:()=>platformImpl,watchRealtime:()=>()=>{}});
+ vm.runInContext(source+'\nglobalThis.adapter={auth,refreshSession,signInWithEmailAndPassword,signOut};',context);
  return context.adapter;
 }
 const response=value=>({ok:true,json:async()=>value});
@@ -87,4 +87,13 @@ test('Firebase SDK is lazy loaded only outside staging and Neon uses explicit se
  const neon=await readFile(new URL('../assets/js/neon-browser.js',import.meta.url),'utf8');
  assert.doesNotMatch(neon,/firebasejs|firestore/);assert.match(neon,/runTransaction\(\).*server_action_required/);
  const checkout=await readFile(new URL('../assets/js/pagamento.js',import.meta.url),'utf8');assert.match(checkout,/\/api\/v1\/checkout/);assert.match(checkout,/packageId:pack\.id,requestKey/);
+});
+
+test('logout of a deleted or expired session clears the account without a false failure',async()=>{
+ const a=await authAdapter(async url=>url==='/api/v1/config'?authConfig:{ok:false,status:401,json:async()=>({})},async()=>{throw Object.assign(Error('expired'),{code:'authentication_required'});});
+ a.auth.currentUser={uid:'old'};await a.signOut();assert.equal(a.auth.currentUser,null);
+});
+test('logout does not hide an actual revocation service outage',async()=>{
+ const a=await authAdapter(async url=>url==='/api/v1/config'?authConfig:response({}),async()=>{throw Object.assign(Error('unavailable'),{code:'service_unavailable'});});
+ a.auth.currentUser={uid:'old'};await assert.rejects(a.signOut(),/unavailable/);assert.equal(a.auth.currentUser,null);
 });
