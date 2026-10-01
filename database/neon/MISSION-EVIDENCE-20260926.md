@@ -1,55 +1,67 @@
-# Migration evidence — updated 2026-10-01
+# Mission evidence — 2026-10-01 follow-up
 
-PR #11, branch `feat/neon-postgresql-migration`, starting HEAD `7b2b1cf93bcefedea571c0a9b861a38bb8ea77fb`. The four mission documents were read before edits. Main was initially `bb3a3f600f50e0a7ced5a29e4a6f83f1dc9ca7eb`; a later remote check found `18370b2661d0ba2020992b94a38a5f877f4d24c1`. The PR branch had not advanced. Main was not merged into this work.
+## Scope and revision
 
-**Code concluded: NO. Staging concluded: NO. Ready for cutover: NO. Production migrated: NO.** PR remains Draft. No production deployment/cutover, Firebase production write, Stripe live operation, official-domain change or PR #16 modification was performed.
+Repository Guilherme-Augusto-INF/Zytrix, Draft PR #11, feat/neon-postgresql-migration. Started at f55a8d99495f26e7cd1b1d2e765d05ac0df0ea98. Main 18370b2661d0ba2020992b94a38a5f877f4d24c1 integrated INTO migration branch; conflict-resolution commit 5b7724a290fbbffa615a8b01f7fc221809cb5b69. Resolved perfil.js and aeo-geo-check.yml, preserving Neon recovery and main's newer profile/channel/player/chat behavior. No main merge, production deployment/cutover, Firebase changes, Stripe live or PR #16 changes.
 
-## Delivered in this execution
+## Implemented and applied only to staging
 
-Original V1 screens now select Neon before loading the legacy Firebase SDK. Explicit relational reads/writes and server actions cover live configuration/lifecycle, creator dashboards, profiles/follows/social, notifications, clips/VOD, schedules, chat/membership/moderation, viewer presence, reports/admin, progress/rewards/polls/promotions, preferences/discovery and wallet/support/payment initiation. Generic financial writes and arbitrary document paths are denied. Financial operations and retries retain server-authoritative identity, prices/costs, row locks, ledger entries and idempotency.
+Pinned project soft-water-98807259, branch br-wispy-scene-b6325si6, database neondb, host ep-ancient-recipe-b65mlsad.c-2.sa-east-1.aws.neon.tech. Runtime role zytrix_staging_app. No production branch operations.
 
-Neon Auth verifier pins the actual staging service, Ed25519 signature/JWKS, issuer, audience, expiration and bounded token lifetime. Identity mapping preserves imported internal UUIDs and Firebase IDs. Enrollment requires independently verified Neon and fresh Firebase proofs; email equality never links accounts. Session change/expiry clears private subscriptions, and snapshots compare field values even when document IDs do not change. Account deletion still requires implementation; its legacy path is blocked.
+- 012: retention-safe self-service account deletion, deleted_at, private deletion/evidence records, narrow live-session/revoke/disable Auth helpers. App cannot enumerate session tokens/passwords.
+- 013: idempotent authoritative staging-only governance seed and four versioned, SHA-256 recorded draft policy snapshots. Explicit staging consent, enabled signup, versions and verified identity enforced server-side. Production POLICY_RELEASE remains ineffective.
+- 014: sandbox PaymentIntent references and refund records. Atomic/idempotent full refund debits only if coins remain; partial/insufficient-balance refunds require manual review.
+- 015: follows(channel_id,followed_at DESC,follower_id), justified by follower roster/count/notifications access; existing PK starts with follower_id.
 
-SSE remains authenticated PostgreSQL polling every two seconds, delivered over SSE, with at most 20 seconds per stream, token expiry checks and released database clients between snapshots. Original live/chat subscriptions share transport per account/live. Other document subscriptions poll every 15 seconds without overlapping requests and clean up on identity change. This is not CDC. Joined clip/chat/support metadata and batched schedules/admin summaries remove several original N+1 reads.
+No applied historical migration was rewritten. Identity/profile/wallet import rows were not reconciled or overwritten. Category catalog remains 16 canonical categories, 142 subcategories and one historical alias (159 rows).
 
-Applied **only to verified Neon staging** (`soft-water-98807259`, `br-wispy-scene-b6325si6`, `neondb`):
-- 009: additive original-screen grants, disabled-account field and narrowly selected Auth columns; runtime remains zytrix_staging_app.
-- 010: additive shared catalog: 16 canonical categories / 142 subcategories, preserving the original eight and existing IDs.
-- 011: restore only three missing canonical parent links. Physical catalog: 159 rows, including the retained gaming alias.
-- Auth trusted return origin: http://127.0.0.1:5502 only. No production OAuth settings were modified.
+Account deletion retains internal UUID/Firebase UID, external identity tombstones, wallet balance/totals, orders/ledger/support/redemption/claim history, policy acceptances, reports/moderation/bans/audit. Profile/managed user are anonymized; channels/lives/clips are hidden/scrubbed; active polls close, rewards/promotions deactivate, future schedules cancel, personal preferences/follows/presence are removed. Original chat text is copied to restricted security evidence before visible anonymization. The operation requires a verified own Neon session created within five minutes, locks account/lives/wallet and is transactional/idempotent. Retention duration/legal requests remain an operator/cutover policy gate.
 
-No newer profile, identity, wallet or ledger data was overwritten. Integration fixtures rolled back; separately committed disposable concurrency fixtures were removed.
+Auth now binds a signature/issuer/audience/expiry verified Neon JWT to a matching live managed session token; disabled/deleted/logged-out sessions cannot retain API/SSE access. Browser uses bounded single-flight JWT caching, clears private subscriptions/cache on account replacement, waits initial session before document reads and restarts public listeners safely. Dual-proof linking rechecks ban after independent proof verification and preserves imported internal IDs; matching emails never authorize linking.
+
+Original-screen fixes: channel creation sets current_live_id, native neon:UUID report references are accepted, unauthorized admin promotion UI stays hidden, profile promotion mounting waits for the profile section without observer recursion. Native chat works even before live-extras finishes mounting. Deletion logout cannot interrupt its final navigation.
+
+SSE is authenticated PostgreSQL polling every two seconds, delivered as SSE (NOT CDC), up to 20 seconds/token expiry. Per-process slots: 32 total/3 per subject; released on close/finally. Each poll rechecks managed session and account; DB clients release between polls. Browser abort cancels pending reader; auth 401/403 stops retries. Multi-instance distributed limiting and load testing are not claimed.
 
 ## Executed validation
 
-| Check | Result | Scope |
-|---|---|---|
-| npm test | PASS, 52/52 in the initial final battery | Existing suites plus Neon-token/original-module security tests |
-| npm run check | PASS | JS syntax, policy routes/links/headings, rules copies; Windows used a local python3 shim |
-| npm run test:migration | PASS, 5/5 | Existing transform/remediation/staging guards |
-| Focused post-correction tests | PASS, 15/15 | Auth/API/SSE and snapshot stable-ID regression; four tests added after the initial battery |
-| Session-replacement/snapshot regression | PASS, 7/7 | Specific adapter tests; no real credentials/session |
-| test-platform-staging.mjs --runtime-role | PASS, 29 groups | Real staging PostgreSQL; SET LOCAL ROLE zytrix_staging_app asserted; fixtures ROLLED_BACK |
-| test-wallet-concurrency.mjs | PASS, 2 groups | Two independent restricted-role connections; overspend rejection, simultaneous duplicate retry, conservation/nonnegative balances; fixtures REMOVED |
-| Webhook/fulfillment | PASS locally | Existing signature tests plus simulated sandbox PostgreSQL credit; wrong amount denied, retry credits once |
-| Original-screen browser smoke | PASS, public scope | Home/Explore load actual Neon live; 16 category cards; Clips loads an empty feed; original login form and error handling work |
-| Google OAuth | BLOCKED | Local INVALID_CALLBACKURL fixed; Google then returned redirect_uri_mismatch for Neon's shared regional callback |
-| GitHub Neon Migration Checks at f62e873 | PASS | 55/55 tests, site check, 5/5 migration tests; [run](https://github.com/Guilherme-Augusto-INF/Zytrix/actions/runs/36809131302) |
-| Vercel preview at f62e873 | PASS | Preview build/deployment status; authenticated hosted staging not certified |
-| Firebase CLI | BLOCKED | No authorized accounts; no source export/reconciliation performed |
+| Check | Result and limits |
+|---|---|
+| Conflict-resolution battery | 57/57 application, site check, 5/5 migration, 29 restricted-role groups and two concurrency groups PASS |
+| Final local application battery | 68/69 initially; only failure was live-event error precedence; corrected and payment suite 3/3 PASS. No unresolved application failure |
+| Focused final regressions | 23/23 PASS: original adapter/session races, report references, profile/streaming and reconciliation |
+| npm run check | PASS: syntax, routes/links/anchors/headings, rules copies; final source additions checked again |
+| npm run test:migration | 9/9 PASS (including four reconciliation fixture tests) |
+| Restricted platform staging | 29/29 groups PASS; SET LOCAL ROLE zytrix_staging_app asserted; transaction ROLLED_BACK |
+| Account lifecycle staging | 10/10 groups PASS under restricted role; normal/wallet/transactions/channel/live/content, stale/unlinked/anonymous/deleted/reexecution; ROLLED_BACK |
+| Wallet/Stripe database concurrency | 8/8 groups PASS with independent actual restricted-role connections; insufficient balance, totals/conservation, idempotency/replay, injected intermediate rollback, tampered amount/user/session/currency, concurrent credits and full refund; fixtures REMOVED |
+| npm run test:rules | 43/43 PASS in demo-zytrix-governance emulator; portable Windows runner fixed. Initial stripped Java runtime lacked jdk.httpserver; complete isolated Temurin 21 runtime used. No Firebase rules publication |
+| Original browser public/authenticated navigation | Nine smoke checks PASS; public home/categories/explore/clips, original login/profile/notifications/creator/store/admin-denial |
+| Original browser actions | 13 checks PASS, zero app page errors: real signup/login/enrollment, edit profile/preferences, create channel, Educação/Matemática configuration, start/end, schedule/reward/poll/VOD/chat/SSE/clip |
+| Original two-user browser community | 17 checks PASS, zero app page errors: follows, chat/poll/reward/support, API/UI admin denial, report/moderation, promotion create/claim, notifications/profile/history, real logout and old-JWT rejection |
+| Actual managed-session API/SSE | Eight checks PASS: missing/mismatched sessions, wallet/UID/admin spoofing, private wallet/viewer roster, banned account, per-user SSE cap/disconnect/reconnect, private-live isolation, logout API/SSE revocation |
+| Original deletion browser | Five checks PASS: own fresh real session, original confirmation, managed revocation/disable, wallet/totals/ledger preserved, owned live/channel hidden, old JWT denied |
+| Reconciliation CLI | Actual restricted-role PostgreSQL dry-run with checksummed catalog fixture PASS; applied=0; 111 validated FKs; zero checked negative-wallet/orphan/identity invariants. FK name-array parsing corrected. This is not fresh Firebase reconciliation |
+| Performance preflight | 11 representative EXPLAIN ANALYZE/BUFFERS queries on restricted staging role recorded privately. No production-scale performance claim |
 
-The initial broad battery was run once. Specific failures were corrected and retested: PostgreSQL bigint expectations, members.created_at, creator_attributions.creator_code, fixture VOD expectation, the login message function scope, and snapshot comparison of data. No current test failure is left in the executed scope.
+Browser used installed Edge/Playwright against original V1 HTML and local loopback preview connected to real staging Neon Auth/PostgreSQL. Three disposable example.invalid accounts used REAL managed password signup/login, JWT/session APIs and application authorization. Email verification flag, fixture wallet and fixture admin role were explicitly SIMULATED setup, not real email delivery or imported Firebase linking. Shared Twitch iframe getLayoutMap errors excluded from app errors. No bypass endpoint/config can ship to production.
 
-Private credentials/results stay in ignored migration-data/. No secret or raw user export is committed. No live/production payment was initiated. Actual application Checkout completion and externally signed webhook delivery remain unverified: C:\\Stripe and the previous private export directory are absent here, and no Stripe secrets were invented.
+Fixture cleanup was transactional, guarded by exact managed UUID/example.invalid email and pinned staging target. All three fixtures and their test-only related data removed. Final counts: **22 identities, eight wallets, zero managed Auth users, zero Neon external links**, one staging governance row/four policy snapshots. Financial integration/lifecycle test fixtures rolled back; concurrency fixtures removed. No real imported wallet/profile was altered.
 
-## Current data/Auth evidence and remaining gates
+## Security and performance findings
 
-Read-only staging query: **22 internal identities, eight wallets, zero Neon Auth users, zero Neon mappings, zero governance rows**. Missing wallets/profiles were not recreated merely by login. The governance/config source REST read returned 404. The shared Google provider is configured but its callback is rejected by Google; no real Neon account session or account link was completed.
+Fixed immediate session revocation, session-subject mixing, stale auth/document races, unauthorized promotion UI, private viewer enumeration and deleted-profile publication. Existing parameterized SQL, ownership/admin checks, payload caps, rate limits, financial row locks/constraints/idempotency remain. Real restricted-role and actual HTTP negative cases are recorded above; this is not a claim of formal penetration testing or absence of all possible vulnerabilities.
 
-The Sept 26 evidence (328 imported rows / 17 populated tables from 295 Firestore documents, 22 Auth accounts, and an unapplied delta of two new/two changed documents) is historical, not fresh certification. Old PaymentIntent/audit/timing results were not rerun or claimed as current evidence.
+Removed two redundant raid/host reads from stream documents and joined member/moderator profiles to remove creator roster N+1. Cached managed JWT acquisition avoids /token request storms. No speculative index overhaul; small staging tables may legitimately use sequential scans. Pool maximum five, bounded query/connection timeouts, no DB client held while waiting for next SSE poll.
 
-Remaining: account deletion lifecycle; configured authoritative policies/reports/signup; real managed Auth verification, reset, logout/account switch and dual-proof links; working staging Google OAuth credentials/callback; current source reconciliation; actual Stripe sandbox Checkout and signed webhook delivery; authenticated original-screen smoke. See MODULE-AUDIT.md, AUTH-TRANSITION.md and CUTOVER-ROLLBACK.md.
+## External gates and truthful readiness
 
-CI follow-up: the pre-existing patch-firestore-security.yml was invalid YAML at line 29 and failed before starting any job. Its obsolete repository-rules patch automation was preserved byte-for-byte as patch-firestore-security.yml.disabled. No Firestore rules were edited or deployed. PR #11 still reports mergeable_state=dirty; integration of the current base must be reviewed before a future merge/cutover.
+Repository changes and available staging technical checks are completed. Staging is NOT fully certified: shared Google OAuth still rejects its exact regional callback, real email verification/reset and imported dual-proof linking need controlled real identities, hosted Stripe Checkout/signed external webhook need sandbox secrets, and fresh source reconciliation needs authorized exports. No source data was manufactured to remove those gates.
 
-Final Auth correction: enrollment, identity lookup and linking recheck the managed Auth user row, so an unexpired JWT cannot enroll/link a subsequently banned or deleted managed subject. The specific seven adapter/module tests and 29 restricted-role database groups passed after this change.
+Historical Sept 26 evidence (328 imported rows from 295 documents, 22 Auth accounts, unapplied two-new/two-changed delta) is retained as history, not a fresh comparison. No modified-SCRYPT password import support is established by reviewed Neon managed API documentation; no passwords/hashes imported or reconstructed, no mass email.
+
+See STAGING-READINESS.md for exact user actions and CUTOVER-ROLLBACK.md for prohibited production gates. Credentials, raw exports, browser bodies, fixtures/results, SQL plans and temporary Java runtime stay ignored/private.
+
+GitHub validation at initial published semantic revision 9c7fb48: Quality, AEO/GEO, Governance and Neon Migration Checks PASS; application 70/70, site check PASS, migration 9/9 ([run](https://github.com/Guilherme-Augusto-INF/Zytrix/actions/runs/36854391761)). Vercel Preview READY. Local commit histories were normalized to remove Windows-only line-ending differences; functionality is unchanged.
+
+Hosted branch Preview: https://zytrix-web-git-feat-neon-postg-f6f98a-guilhermeaugusto2525-1431.vercel.app . Authorized only this preview origin on br-wispy-scene-b6325si6 Neon Auth, and verified hosted /login.html callback accepted. Authenticated connector read of /api/v1/config confirms postgresStaging=false/authentication=firebase; hosted Neon runtime variables remain USER ACTION REQUIRED because no Vercel env-write tool or authenticated CLI is available here. No hosted Auth/application smoke is claimed and no production settings changed.

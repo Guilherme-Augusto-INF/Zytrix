@@ -1,26 +1,22 @@
 # Module audit — 2026-10-01
 
-Branch: `feat/neon-postgresql-migration`, PR #11. Starting HEAD: `7b2b1cf93bcefedea571c0a9b861a38bb8ea77fb`.
+PR #11, feat/neon-postgresql-migration. Execution started at f55a8d99495f26e7cd1b1d2e765d05ac0df0ea98. Main 18370b2661d0ba2020992b94a38a5f877f4d24c1 was integrated into this branch in conflict-resolution commit 5b7724a.
 
-## Classification and counting scope
+## Exact counting scope
 
-Global search covered repository source, imports, SQL identifiers, rules, scripts, tests, CI and documentation, excluding dependencies, lockfiles and ignored private exports. Call counts below were obtained from the JavaScript AST: imported SDK/facade bindings, aliases, transaction/batch methods and Timestamp factories. A callback named onSnapshot in realtime-client.js is not a Firestore listener and is excluded.
+Global source search includes imports, aliases, SDK calls, transactions/batches, Timestamp factories, docs, tests, SQL, CI and offline tooling; dependencies, lockfiles and ignored private exports excluded. Browser counts use JavaScript AST CallExpressions bound to Firebase/facade imports. A realtime callback named onSnapshot is not a Firestore SDK subscription.
 
-- A — functional Firestore dependency in the Neon web/API path: **0 modules, 0 call sites**. The only browser Firestore SDK import and getFirestore initialization are in firebase-legacy.js. firebase.js selects neon-browser.js when postgresStaging is true, before loading the legacy module. Config/API failure does not select Firebase. Server/API code has no Firestore SDK dependency.
-- B — isolated compatibility/legacy: **36 browser modules** retain **725 SDK-shaped call sites**: 104 reads, 72 writes/transaction/batch factories, 46 subscriptions, 434 reference/query/transform builders, 43 tx methods, 17 batch methods, eight Timestamp factories and one getFirestore initialization. The 222 primary API calls are shown separately in the table. Under Neon, shared read/write/snapshot calls resolve to explicit relational actions; legacy transactions use guarded alternate branches. The SDK implementation is loaded only outside Neon.
-- B — offline tooling: export-firestore.mjs has **eight** Firestore initialization/query/collection-enumeration call sites, including FieldPath.documentId. It runs only as an explicit export command and is not imported by the application. Total browser plus export tooling: **733** scoped call sites, **0 functional in Neon**.
-- C — nonfunctional runtime references: documentation, migration metadata/mappings with firebase_uid/firebase_id, rules copies, emulator tests, CI commands, development dependencies and fixtures. They do not establish a runtime Firestore dependency.
-- Firebase Auth remains an explicit enrollment proof bridge in neon-auth-page.js/server auth.mjs. It verifies the previous identity for linking; it does not query Firestore, import passwords or replace the Neon application session.
+- A: **0 functional Firestore modules / 0 functional call sites in the Neon application/API path**. firebase.js selects neon-browser.js before loading legacy SDK; errors fail closed. api/server contain no Firestore imports.
+- B: **36 modules with scoped legacy/facade call sites, 739 browser call sites**: 110 reads, 74 writes/factories, 46 subscriptions, 439 builders/transforms, 43 transaction methods, 18 batch methods, eight Timestamp factories, one getFirestore initialization. Primary reads+writes+listeners: 230.
+- B offline: export-firestore.mjs contains eight initialization/query/enumeration calls. **Browser + offline total: 747**; none are a functional application dependency in Neon.
+- C: docs, tests/emulator, migration metadata/firebase_uid/firebase_id, CI/rules copies and dependencies are nonfunctional references. Their textual matches are not counted as runtime calls.
+- **41 modules import ./firebase.js** (shared facade, not necessarily Firestore calls). One module, firebase-legacy.js, directly imports the Firestore browser SDK. The SDK implementation and getFirestore execute only outside staging.
+- Explicit Firebase Auth enrollment proof remains in neon-auth-page.js/auth.mjs. It never invokes Firestore or links by matching email.
 
-## Original V1 module inventory
+N = original business contracts implemented on Neon, despite compatible facade spellings. P = external certification still incomplete. L = isolated legacy path. These labels are not production readiness.
 
-N = business contracts implemented on Neon, with shared facade names retained for legacy compatibility. This denotes code coverage, not authenticated browser certification.
-P = partially delivered. L = legacy-only implementation, not executed by the Neon path.
-Columns: reads; mutation/factory calls; listeners; reference/query/transform builders; transaction methods; batch methods. Timestamp factories and getFirestore are counted above separately.
-
-| Module | Reads | Mutations | Listeners | Builders | tx | batch | State |
+| Module | Reads | Writes/factories | Listeners | Builders | tx | batch | State |
 |---|---:|---:|---:|---:|---:|---:|:---:|
-| firebase-legacy.js | 2 | 2 | 0 | 4 | 0 | 2 | L |
 | admin-promotions.js | 2 | 2 | 0 | 8 | 0 | 0 | N |
 | admin.js | 3 | 5 | 0 | 13 | 0 | 0 | N |
 | ao-vivo.js | 0 | 0 | 1 | 3 | 0 | 0 | N |
@@ -30,6 +26,7 @@ Columns: reads; mutation/factory calls; listeners; reference/query/transform bui
 | config-live.js | 3 | 3 | 0 | 12 | 0 | 3 | N |
 | creator-center.js | 20 | 17 | 2 | 77 | 0 | 0 | N |
 | explorar.js | 5 | 0 | 1 | 17 | 0 | 0 | N |
+| firebase-legacy.js | 2 | 2 | 0 | 4 | 0 | 2 | L |
 | global-features.js | 1 | 0 | 4 | 7 | 0 | 0 | N |
 | home.js | 0 | 0 | 1 | 3 | 0 | 0 | N |
 | live-extras.js | 9 | 7 | 6 | 71 | 22 | 0 | N |
@@ -43,8 +40,8 @@ Columns: reads; mutation/factory calls; listeners; reference/query/transform bui
 | moderation-page.js | 2 | 0 | 0 | 5 | 0 | 0 | N |
 | notificacoes.js | 1 | 1 | 4 | 10 | 0 | 0 | N |
 | notifications-plus.js | 7 | 1 | 0 | 16 | 0 | 0 | N |
-| pagamento.js | 1 | 2 | 0 | 8 | 3 | 0 | N |
-| perfil.js | 11 | 3 | 1 | 32 | 0 | 6 | P |
+| pagamento.js | 1 | 2 | 0 | 8 | 3 | 0 | P |
+| perfil.js | 17 | 5 | 1 | 37 | 0 | 7 | N |
 | platform-core.js | 4 | 6 | 3 | 19 | 2 | 0 | N |
 | platform-global.js | 1 | 0 | 0 | 1 | 0 | 0 | N |
 | policy-acceptance.js | 2 | 1 | 0 | 3 | 0 | 0 | L |
@@ -56,20 +53,22 @@ Columns: reads; mutation/factory calls; listeners; reference/query/transform bui
 | social.js | 4 | 7 | 3 | 17 | 0 | 6 | N |
 | status.js | 1 | 0 | 0 | 3 | 0 | 0 | N |
 | streamer-dashboard.js | 3 | 0 | 2 | 7 | 0 | 0 | N |
-| **Total** | **104** | **72** | **46** | **434** | **43** | **17** | |
+| Total | 110 | 74 | 46 | 439 | 43 | 18 | |
 
-Implemented original-screen contracts include live configuration/lifecycle, creator dashboards, profiles/social/follows, notifications/read markers, clips/VOD, schedules, chat/moderators/members, viewer presence/counts, reports/moderation/admin, progress/rewards/polls/promotions, wallet/support/history, payment initiation and preferences/discovery. Explicit server actions handle money, voting, moderation and progress; the relational document adapter rejects arbitrary paths and generic financial writes. Unknown operations fail closed.
+Facade import inventory: admin-promotions.js, admin.js, ao-vivo.js, auth-pages.js, categoria.js, category-follow.js, clips.js, config-live.js, creator-center.js, explorar.js, global-features.js, home.js, live-extras.js, live-moderator.js, live-player-access.js, live-social.js, live-support-alerts.js, live-vod.js, live.js, loja.js, moderation-page.js, notificacoes.js, notifications-plus.js, pagamento.js, perfil.js, platform-backend.js, platform-core.js, platform-global.js, policy-acceptance.js, profile-plus.js, profile-promotions.js, profile-social.js, report-page.js, report-service.js, sair.js, social.js, staging-app.js, staging-validation.js, status.js, streamer-dashboard.js, ui.js.
 
-The original public home, Categories, Explore and Clips and original login form were exercised in the local Neon preview. Restricted-role PostgreSQL tests cover 29 scenario groups. Authenticated original-screen end-to-end flows still need a real Neon session.
+## Original screen coverage and isolation
 
-The shared catalog contains 16 canonical categories and 142 subcategories, preserving the original eight categories. Additive 010 inserts the catalog without replacing existing rows. 011 restores three missing canonical parent relationships only. Staging has 159 category rows: 16 canonical roots, 142 children and one preserved legacy root alias, gaming.
+Live configuration/start/end, creator center/dashboard, profile/edit/recovery/deletion, follows, notifications, clips/VOD, schedules, chat/moderation, viewer presence, reports/admin, preferences/progress, rewards/polls/promotions and wallet/support/history are relational. Money/voting/moderation use explicit authorized server actions; arbitrary SQL, document paths and financial writes are rejected.
 
-## Partial modules and actual gaps
+Authenticated original-screen browser evidence uses real managed signup/login/sessions and disposable staging fixtures. Email verification and administrator/wallet provisioning are explicitly simulated test setup; public/home/categories/explore/clips/store and authenticated creator/profile/live/community/report/moderation flows were exercised. See MISSION-EVIDENCE-20260926.md for executed counts and limits.
 
-- perfil.js: profile editing, explicit recovery, channel creation and wallet reads are implemented; account deletion remains deliberately unavailable on Neon. A complete, retention-safe deletion/enrollment-session lifecycle remains implementation work. Legacy collectionGroup/batch deletion cannot run in staging.
-- auth-pages.js/neon-auth-page.js/neon-browser.js: managed Auth login/signup/verification/reset/logout and dual-proof enrollment are implemented; real session/linking/reset/account-switch regression is not certified. Google provider is blocked externally (see AUTH-TRANSITION.md).
-- Signup and reports are gated by authoritative governance configuration. Staging has zero governance rows, and the read-only Firebase REST request for governance/config returned NOT_FOUND. Current policy-release.js marks draft policies ineffective. No effective policies or consents were fabricated.
-- Payment code is sandbox-only and validated locally; external hosted Checkout/webhook delivery is unverified without sandbox secrets/configuration.
-- The existing source delta and a fresh reconciliation remain unapplied/unverified.
+Profile deletion is now implemented server-side with retained identities, wallets, ledger, moderation and audit evidence. Legacy collectionGroup/batch account deletion cannot run in staging. Governance/policy-acceptance legacy code does not execute on the Neon signup path; current policy versions and explicit staging-only consent are enforced by PostgreSQL.
 
-Firestore isolation therefore does not establish code, staging or cutover completion. PR remains Draft.
+Catalog remains 16 canonical categories / 142 subcategories plus the retained gaming alias (159 physical rows). Main's playback/chat/channel/profile fixes are preserved. No PR #16 changes.
+
+## Remaining partial delivery
+
+Auth provider Google callback is blocked externally; real email OTP/reset and real imported Firebase dual-proof linking remain unverified. Hosted Stripe sandbox Checkout and external signed webhook require sandbox secrets. Fresh Firebase reconciliation requires current source exports. These are staging certification gates; no functional Firestore dependency is left behind as a workaround.
+
+Future removal candidates: firebase-legacy.js and the legacy branches in the table, auth-pages.js fallback, policy-acceptance.js, offline export tooling after rollback/source-retention requirements end. Do not remove them during this prohibited-cutover mission.
