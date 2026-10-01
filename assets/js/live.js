@@ -339,7 +339,12 @@ async function sendChatMessage() {
     const feedback = document.querySelector('#chat-feedback');
     if (!user) { setChatFeedback('Faça login para enviar mensagens.', true); return; }
     if (!user.emailVerified) { setChatFeedback('Verifique seu e-mail para conversar.', true); return; }
-    // O envio real é instalado por live-extras.js, que usa chatRate atômico.
+    if(await platformSource.staging()){
+      const input=document.querySelector('#chat-input'),text=input?.value.trim();if(!text||text.length>300)return;
+      try{await ownPlatform(user.uid,'chat.send',{liveId:streamId,text,requestKey:crypto.randomUUID()});if(input.isConnected)input.value='';setChatFeedback('Enviado.',false);}
+      catch{setChatFeedback('Não foi possível enviar. Verifique as regras e aguarde o slow mode.',true);}return;
+    }
+    // O envio legado é instalado por live-extras.js, que usa chatRate atômico.
     if (feedback) feedback.textContent = 'Preparando envio seguro...';
 }
 
