@@ -51,6 +51,7 @@ export async function executePlatform(c, identity, action, data = {}) {
       if(!identity)fail('authentication_required',401);
       if(!identity.emailVerified||!identity.email||(identity.authProvider!=='neon'&&!['password','google'].includes(identity.provider)))fail('verified_email_required',403);
       if(identity.authProvider==='neon'){
+        if(!(await c.query('select id from neon_auth."user" where id=$1 and coalesce(banned,false)=false',[identity.subject])).rowCount)fail('account_disabled',403);
         const linked=await c.query("select 1 from private.external_auth_identities where provider='neon' and subject=$1",[identity.subject]);
         if(linked.rowCount)fail('account_already_exists',409);
         // Matching emails are only a reason to require explicit enrollment, never proof of ownership.

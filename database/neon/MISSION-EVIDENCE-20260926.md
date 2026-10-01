@@ -27,8 +27,8 @@ No newer profile, identity, wallet or ledger data was overwritten. Integration f
 | npm test | PASS, 52/52 in the initial final battery | Existing suites plus Neon-token/original-module security tests |
 | npm run check | PASS | JS syntax, policy routes/links/headings, rules copies; Windows used a local python3 shim |
 | npm run test:migration | PASS, 5/5 | Existing transform/remediation/staging guards |
-| Focused post-correction tests | PASS, 15/15 | Auth/API/SSE and snapshot stable-ID regression; three tests added after the initial battery |
-| Session-replacement/snapshot regression | PASS, 6/6 | Specific adapter tests; no real credentials/session |
+| Focused post-correction tests | PASS, 15/15 | Auth/API/SSE and snapshot stable-ID regression; four tests added after the initial battery |
+| Session-replacement/snapshot regression | PASS, 7/7 | Specific adapter tests; no real credentials/session |
 | test-platform-staging.mjs --runtime-role | PASS, 29 groups | Real staging PostgreSQL; SET LOCAL ROLE zytrix_staging_app asserted; fixtures ROLLED_BACK |
 | test-wallet-concurrency.mjs | PASS, 2 groups | Two independent restricted-role connections; overspend rejection, simultaneous duplicate retry, conservation/nonnegative balances; fixtures REMOVED |
 | Webhook/fulfillment | PASS locally | Existing signature tests plus simulated sandbox PostgreSQL credit; wrong amount denied, retry credits once |
@@ -51,3 +51,5 @@ The Sept 26 evidence (328 imported rows / 17 populated tables from 295 Firestore
 Remaining: account deletion lifecycle; configured authoritative policies/reports/signup; real managed Auth verification, reset, logout/account switch and dual-proof links; working staging Google OAuth credentials/callback; current source reconciliation; actual Stripe sandbox Checkout and signed webhook delivery; authenticated original-screen smoke. See MODULE-AUDIT.md, AUTH-TRANSITION.md and CUTOVER-ROLLBACK.md.
 
 CI follow-up: the pre-existing patch-firestore-security.yml was invalid YAML at line 29 and failed before starting any job. Its obsolete repository-rules patch automation was preserved byte-for-byte as patch-firestore-security.yml.disabled. No Firestore rules were edited or deployed. PR #11 still reports mergeable_state=dirty; integration of the current base must be reviewed before a future merge/cutover.
+
+Final Auth correction: enrollment, identity lookup and linking recheck the managed Auth user row, so an unexpired JWT cannot enroll/link a subsequently banned or deleted managed subject. The specific seven adapter/module tests and 29 restricted-role database groups passed after this change.

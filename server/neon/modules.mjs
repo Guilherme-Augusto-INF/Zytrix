@@ -50,6 +50,7 @@ export async function executeModules(c,identity,action,data,ctx) {
  case 'auth.identity': {
   if(!identity)fail('authentication_required',401);
   if(identity.authProvider!=='neon')return {uid:(await actor(c,identity)).firebase_uid};
+  if(!await one(c,'select id from neon_auth."user" where id=$1 and coalesce(banned,false)=false',[identity.subject]))fail('account_disabled',403);
   const mapped=await one(c,`select i.firebase_uid as uid,a.disabled_at,a.provider from private.external_auth_identities e
     join public.identities i on i.id=e.user_id join public.user_accounts a on a.user_id=i.id where e.provider='neon' and e.subject=$1`,[identity.subject]);
   if(mapped?.disabled_at)fail('account_disabled',403);
@@ -59,6 +60,7 @@ export async function executeModules(c,identity,action,data,ctx) {
  case 'auth.link': {
   if(!identity||identity.authProvider!=='neon')fail('authentication_required',401);
   if(!identity.emailVerified)fail('verified_email_required',403);
+  if(!await one(c,'select id from neon_auth."user" where id=$1 and coalesce(banned,false)=false',[identity.subject]))fail('account_disabled',403);
   // An independent, freshly authenticated Firebase session is mandatory. No email comparison.
   const proof=await verifyFirebaseToken(str(data.firebaseToken,16000,1));
   if(!proof||!proof.emailVerified||!Number.isFinite(proof.authTime)||proof.authTime>Date.now()/1000+30||Date.now()/1000-proof.authTime>300)fail('fresh_dual_proof_required',403);

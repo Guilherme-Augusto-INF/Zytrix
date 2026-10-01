@@ -2,6 +2,12 @@ import test from 'node:test';import assert from 'node:assert/strict';import {rea
 import {executePlatform} from '../server/neon/platform.mjs';
 import vm from 'node:vm';
 const noDb={query(){throw Error('Unexpected access');}};
+test('disabled or deleted managed subjects cannot enroll or link using an unexpired token',async()=>{
+ const missing={query:async()=>({rows:[],rowCount:0})};
+ const identity={authProvider:'neon',subject:'00000000-0000-0000-0000-000000000001',emailVerified:true,email:'fixture@example.invalid'};
+ for(const action of ['account.register','auth.identity','auth.link'])
+  await assert.rejects(executePlatform(missing,identity,action,{}),e=>e.code==='account_disabled'&&e.status===403);
+});
 async function authAdapter(fetchImpl){
  const source=(await readFile(new URL('../assets/js/neon-browser.js',import.meta.url),'utf8'))
   .replace(/^import .*;$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:class|function|const))/g,'');
