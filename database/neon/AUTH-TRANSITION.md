@@ -1,24 +1,44 @@
-# Firebase Authentication → Neon Auth: staging preparation
+# Neon Auth transition — 2026-10-01
 
-Status on 2026-09-26: Neon Auth is provisioned on staging only. Its JWKS endpoint responds successfully. Existing accounts still authenticate through Firebase. No password, provider, email verification state, or Firebase account has been changed. There are no completed account links yet.
+Neon Auth is implemented for the isolated staging path; real enrollment is not certified. Read-only database counts: **0 managed users, 0 Neon links**, with 22 preserved internal identities. No production account, password, OAuth setting or authentication domain was changed.
 
-## Account preservation
+## Actual staging configuration
 
-Keep `public.identities.id` and all dependent PostgreSQL rows unchanged. Existing Firebase UIDs remain legacy identifiers. The new `private.external_auth_identities` table maps a verified Neon subject to the existing internal UUID. Its unique constraints prevent one Neon subject linking to multiple accounts, or multiple Neon subjects linking to one account. The application role can read the map but cannot modify it.
+Project soft-water-98807259, branch br-wispy-scene-b6325si6, database neondb.
 
-The private fresh export contains 22 Auth identities, all enabled. It deliberately excludes password hashes. A matching email address is insufficient proof of account ownership. Do not bulk-create identities from email matches or reconstruct the intentionally deleted profile.
+- Provider: Better Auth.
+- Base: https://ep-ancient-recipe-b65mlsad.neonauth.c-2.sa-east-1.aws.neon.tech/neondb/auth
+- JWKS: base plus /.well-known/jwks.json.
+- Expected JWT issuer/audience: https://ep-ancient-recipe-b65mlsad.neonauth.c-2.sa-east-1.aws.neon.tech (the origin, not the full base path).
+- Actual configuration uses EdDSA/Ed25519 and a default 900-second token lifetime. The server pins this service and checks signature, algorithm/key, issuer, audience, exp/iat/nbf; unavailable JWKS fails closed.
+- Email/password and shared OTP email delivery are configured; application writes/enrollment require verified contact independently of the provider's optional verification flags.
+- localhost is allowed. Added trusted origin http://127.0.0.1:5502 only on this staging branch after an observed INVALID_CALLBACKURL.
 
-## Required implementation before enabling Neon login
+Enable the original-screen staging path with ZYTRIX_POSTGRES_STAGING=true, the pinned restricted-role database connection, ZYTRIX_AUTH_PROVIDER=neon and the exact ZYTRIX_NEON_AUTH_URL above. Config errors do not fall back to production Firebase. The local staging-preview script configures these non-secret flags and requires a private runtime connection file.
 
-1. Implement and test Neon session verification against the staging provider, with explicit issuer, audience, expiration and signature validation. Reject tokens from production, unrelated branches and untrusted issuers. Determine the actual supported claims from the SDK and provider configuration; do not infer them from a decoded, unverified token.
-2. Implement explicit account linking requiring fresh authenticated sessions at both providers. Resolve the internal UUID from the verified Firebase UID; resolve the Neon subject from the verified Neon session. Link in one transaction under a dedicated narrowly privileged server operation. Deny conflicting links, disabled accounts and stale sessions. Do not accept a target UID or email as authorization.
-3. Keep Firebase login available during staged adoption. Map both providers to the same internal UUID. Exercise profile, wallet, moderation and ownership regression tests for both sessions. Verify that logging out or switching accounts clears subscriptions and cached private data.
-4. Create a separate signup path for new Neon users. Require explicit current policy acceptance and verified contact information. Never create a Firebase production account from the staging signup page.
-5. Validate password migration compatibility using supported provider APIs before considering hash import. Firebase uses a modified SCRYPT format; this export is not a password migration package. If passwords cannot transfer, a user-controlled enrollment/reset flow and communication approval are required. No emails have been sent.
-6. Validate Google OAuth configuration and redirects on staging before enabling it. Only switch the default provider after all 22 existing accounts have a tested preservation/recovery path and final reconciliation passes.
+## Preserved identities and linking
+
+public.identities.id, Firebase UIDs, profiles and wallet/ledger references remain unchanged. private.external_auth_identities maps the verified Neon subject to the internal UUID; unique constraints protect subject and account ownership. Migration 009 grants runtime SELECT/INSERT on this map and SELECT only on the necessary Auth user/account columns. Runtime cannot read managed passwords or provider tokens.
+
+auth.link requires a verified Neon JWT plus an independently signature-verified Firebase token with verified email and recent auth_time (at most five minutes, no future time beyond clock tolerance). The server derives both identities. Subject/account advisory locks and unique constraints prevent conflicting links. Matching emails never authorize linking; an email collision during signup instead requires dual-proof enrollment. Disabled/banned application or Neon accounts are refused. No bulk linking occurred.
+
+The original login/registration/reset pages use managed sign-in, signup, email OTP, reset and logout. Enrollment supplies a legacy password proof directly to Firebase's existing Identity Toolkit endpoint or a Google proof using only Firebase App/Auth with in-memory persistence. It never loads Firestore or stores the previous password; the form clears it after submission. New profiles require explicit registration with authoritative current policy versions. The governance row is absent, and source governance/config returned 404, so new-profile registration/reports remain gated. No policy release or consent was fabricated.
+
+Session replacement waits out an older refresh, tokens are checked against the visible account to prevent mixed-account UI, account changes broadcast across tabs, and private subscriptions cancel on identity change. API/SSE responses use no-store. The server repeats ownership/admin/disabled checks; browser claims never authorize roles or money. These controls have unit/restricted-role coverage, but real managed login/reset/logout/account switch and dual-proof linking still need authenticated browser verification.
+
+## Passwords and Google
+
+The reviewed Neon Auth API documentation does not establish a supported Firebase modified-SCRYPT hash import operation. No password hashes were exported, reconstructed or imported. Use user-controlled managed enrollment/verification/reset, proving the previous identity when linking is required. Do not send mass enrollment mail or modify production accounts.
+
+Google smoke reached the provider after the local callback origin was authorized. Google's configured shared client rejected the regional callback with **redirect_uri_mismatch**:
+https://neonauth.c-2.sa-east-1.aws.neon.tech/auth/oauth/callback/google
+
+The shared client credentials are owned by the provider and no usable custom staging OAuth secret is available here. A working staging-only provider configuration or correction of the shared provider is required. Callback → session → linking → return → logout remains BLOCKED, with zero completed accounts/links.
+
+Account deletion also remains unavailable in the Neon implementation; it must preserve financial integrity and use a complete self-service managed Auth/session lifecycle. Its legacy destructive path is blocked in staging.
 
 ## Reversal
 
-Disable Neon login/linking flags and retain Firebase verification. Preserve the link table and audit records; do not delete accounts or rewrite internal UUIDs. Restore application code from the approved previous commit if needed. Account linking does not authorize Firebase account deletion.
+Disable staging flags/stop the preview if validation fails. Preserve additive migrations, identity links and ledger evidence. Revert the application revision on the migration branch after review; no production switch or account deletion is authorized. A future production cutover requires all preservation/recovery gates in CUTOVER-ROLLBACK.md.
 
-References: [Neon Auth overview](https://neon.com/docs/auth/overview), [Neon authentication flow](https://neon.com/docs/auth/authentication-flow), [Firebase password export format](https://firebase.google.com/docs/cli/auth).
+References: [Neon authentication flow](https://neon.com/docs/auth/authentication-flow), [Neon Auth overview](https://neon.com/docs/auth/overview), [Firebase password export format](https://firebase.google.com/docs/cli/auth).

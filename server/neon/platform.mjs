@@ -2,6 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { v5 as uuidv5 } from 'uuid';
 import { safeStreamingUrl } from '../../assets/js/security.js';
 import { parseStreamingSource } from '../../assets/js/streaming.js';
+import {executeModules} from './modules.mjs';
 
 export class ApiError extends Error {
   constructor(code, status = 400) { super(code); this.code = code; this.status = status; }
@@ -13,8 +14,12 @@ const key = value => typeof value === 'string' && /^[A-Za-z0-9_-]{16,100}$/.test
 export async function actor(c, identity, verified = false) {
   if (!identity) fail('authentication_required', 401);
   if (verified && !identity.emailVerified) fail('verified_email_required', 403);
-  const r = await c.query(`select i.id, i.firebase_uid, exists(select 1 from public.admins a where a.user_id=i.id and a.active) as admin
-    from public.identities i where i.firebase_uid=$1`, [identity.uid]);
+  const r = identity.authProvider==='neon'?await c.query(`select i.id,i.firebase_uid,exists(select 1 from public.admins a where a.user_id=i.id and a.active) as admin
+      from private.external_auth_identities e join public.identities i on i.id=e.user_id
+      join public.user_accounts a on a.user_id=i.id join neon_auth."user" n on n.id=e.subject::uuid
+      where e.provider='neon' and e.subject=$1 and a.disabled_at is null and coalesce(n.banned,false)=false`,[identity.subject]):await c.query(`select i.id, i.firebase_uid, exists(select 1 from public.admins a where a.user_id=i.id and a.active) as admin
+    from public.identities i where i.firebase_uid=$1
+      and not exists(select 1 from public.user_accounts a where a.user_id=i.id and a.disabled_at is not null)`, [identity.uid]);
   if (!r.rowCount) fail('account_not_migrated', 403);
   const user = r.rows[0];
   const penalty = await c.query(`select type from public.moderation_penalties where user_id=$1 and active
@@ -44,7 +49,15 @@ export async function executePlatform(c, identity, action, data = {}) {
   switch (action) {
     case 'account.register': {
       if(!identity)fail('authentication_required',401);
-      if(!identity.emailVerified||!identity.email||!['password','google'].includes(identity.provider))fail('verified_email_required',403);
+      if(!identity.emailVerified||!identity.email||(identity.authProvider!=='neon'&&!['password','google'].includes(identity.provider)))fail('verified_email_required',403);
+      if(identity.authProvider==='neon'){
+        const linked=await c.query("select 1 from private.external_auth_identities where provider='neon' and subject=$1",[identity.subject]);
+        if(linked.rowCount)fail('account_already_exists',409);
+        // Matching emails are only a reason to require explicit enrollment, never proof of ownership.
+        if((await c.query('select 1 from public.user_accounts where lower(email)=lower($1)',[identity.email])).rowCount)fail('dual_proof_enrollment_required',409);
+        identity={...identity,uid:'neon:'+identity.subject,provider:'password'};
+        if((await c.query('select 1 from neon_auth.account where "userId"=$1 and "providerId"=\'google\'',[identity.subject])).rowCount)identity.provider='google';
+      }
       const username=text(data.username,2,30);if(!/^[A-Za-z0-9_.-]+$/.test(username))fail('invalid_username');
       if(data.acceptPolicies!==true)fail('policy_acceptance_required');
       const policy=(await c.query('select * from public.governance_config where singleton and terms_effective')).rows[0];
@@ -52,10 +65,11 @@ export async function executePlatform(c, identity, action, data = {}) {
       await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['register:'+identity.uid]);
       if((await c.query('select 1 from public.identities where firebase_uid=$1',[identity.uid])).rowCount)fail('account_already_exists',409);
       if((await c.query('select 1 from private.reserved_usernames where username_key=lower($1)',[username])).rowCount)fail('reserved_username');
-      const userId=uuidv5('firebase-auth:'+identity.uid,uuidv5('zytrix-ca4f2',uuidv5.DNS));
+      const userId=uuidv5((identity.authProvider==='neon'?'neon-auth:':'firebase-auth:')+identity.uid,uuidv5('zytrix-ca4f2',uuidv5.DNS));
       await c.query('insert into public.identities(id,firebase_uid) values($1,$2)',[userId,identity.uid]);
       await c.query('insert into public.user_accounts(user_id,firebase_uid,zytrix_id,email,provider) values($1,$2,$3,$4,$5)',[userId,identity.uid,'ZY-'+userId,identity.email,identity.provider]);
       await c.query('insert into public.profiles(user_id,firebase_uid,username) values($1,$2,$3)',[userId,identity.uid,username]);
+      if(identity.authProvider==='neon')await c.query("insert into private.external_auth_identities(provider,subject,user_id) values('neon',$1,$2)",[identity.subject,userId]);
       for(const [name,version]of [['terms',policy.terms_version],['privacy',policy.privacy_version],['community_guidelines',policy.rules_version],['content_policy',policy.rules_version]])
         await c.query('insert into public.policy_acceptances(user_id,policy,version) values($1,$2,$3)',[userId,name,version]);
       return {registered:true};
@@ -203,12 +217,17 @@ export async function executePlatform(c, identity, action, data = {}) {
     }
     case 'live.get': {
       const u=identity?await actor(c,identity):null;const l=await live(c,data.liveId,u);
-      const owner=(await c.query('select firebase_uid from public.identities where id=$1',[l.owner_id])).rows[0];
+      const owner=(await c.query(`select i.firebase_uid,ch.firebase_id as "channelId",r.firebase_id as "raidTargetStreamId",h.firebase_id as "hostTargetStreamId"
+        from public.identities i join public.channels ch on ch.id=$2 left join public.lives r on r.id=$3 left join public.lives h on h.id=$4 where i.id=$1`,[l.owner_id,l.channel_id,l.raid_target_live_id,l.host_target_live_id])).rows[0];
       return {live:{id:l.firebase_id,title:l.title,description:l.description,status:l.status,streamerUid:owner.firebase_uid,
         categoryId:l.category_id,playbackURL:l.playback_url,thumbnailURL:l.thumbnail_url,matureContent:l.mature_content,
-        createdAt:l.created_at,startedAt:l.started_at,endedAt:l.ended_at},
+        createdAt:l.created_at,startedAt:l.started_at,endedAt:l.ended_at,vodURL:l.vod_url,totalViews:l.total_views,
+        supportAlertSound:l.support_alert_sound,supportGoalLabel:l.support_goal_label,supportGoalCoins:l.support_goal_coins,
+        supportAlertTheme:l.support_alert_theme,supportAlertMinCoins:l.support_alert_min_coins,supportAlertDurationMs:l.support_alert_duration_ms,
+        channelId:owner.channelId,raidTargetStreamId:owner.raidTargetStreamId??'',hostTargetStreamId:owner.hostTargetStreamId??'',
+        viewerCount:(await c.query('select count(*)::int as count from private.live_viewer_sessions where live_id=$1 and expires_at>now()',[l.id])).rows[0].count},
         permissions:{owner:l.owner_id===u?.id,moderator:u?await canModerate(c,u,l):false},
-        channelId:(await c.query('select firebase_id from public.channels where id=$1',[l.channel_id])).rows[0].firebase_id};
+        channelId:owner.channelId};
     }
     case 'live.state': {
       const u=await actor(c,identity,true);const l=await live(c,data.liveId,u,true);
@@ -253,8 +272,8 @@ export async function executePlatform(c, identity, action, data = {}) {
       await c.query('insert into public.notification_states(user_id,state_type,last_seen_at) values($1,$2,now()) on conflict(user_id,state_type) do update set last_seen_at=now(),updated_at=now()',[u.id,data.type]);return {seen:true};
     }
     case 'transactions.list': {
-      const u=await actor(c,identity);const r=await c.query(`select t.id,t.type,t.status,t.amount::text,t.message,t.created_at as "createdAt",f.firebase_uid as "fromUid",i.firebase_uid as "toUid"
-        from public.zy_coin_transactions t left join public.identities f on f.id=t.from_user_id left join public.identities i on i.id=t.to_user_id
+      const u=await actor(c,identity);const r=await c.query(`select t.id,t.type,t.status,t.amount::text,t.message,t.created_at as "createdAt",f.firebase_uid as "fromUid",i.firebase_uid as "toUid",l.firebase_id as "streamId",jsonb_build_object('username',coalesce(p.username,'Usuário'),'photoURL',coalesce(p.photo_url,'')) as "fromProfile"
+        from public.zy_coin_transactions t left join public.identities f on f.id=t.from_user_id left join public.identities i on i.id=t.to_user_id left join public.lives l on l.id=t.live_id left join public.profiles p on p.user_id=t.from_user_id
         where t.from_user_id=$1 or t.to_user_id=$1 order by t.created_at desc,t.id limit 100`,[u.id]);return {transactions:r.rows};
     }
     case 'chat.pin': {
@@ -341,7 +360,7 @@ export async function executePlatform(c, identity, action, data = {}) {
     }
     case 'chat.list': {
       const u=identity?await actor(c,identity):null;const l=await live(c,data.liveId,u);
-      const r=await c.query(`select coalesce(m.firebase_id,m.id::text) as id,i.firebase_uid as uid,m.text,m.created_at as "createdAt",p.username,p.photo_url as "photoURL"
+      const r=await c.query(`select coalesce(m.firebase_id,m.id::text) as id,i.firebase_uid as uid,m.text,m.created_at as "createdAt",p.username,p.photo_url as "photoURL",exists(select 1 from public.admins a where a.user_id=i.id and a.active) as "isAdmin"
         from public.chat_messages m join public.identities i on i.id=m.sender_id left join public.profiles p on p.user_id=i.id
         where m.live_id=$1 and m.status='visible' order by m.created_at desc,m.id desc limit 100`,[l.id]);
       return {messages:r.rows.reverse()};
@@ -397,6 +416,6 @@ export async function executePlatform(c, identity, action, data = {}) {
       if(data.following)await c.query('insert into public.follows(follower_id,channel_id) values($1,$2) on conflict do nothing',[u.id,row.id]);
       else await c.query('delete from public.follows where follower_id=$1 and channel_id=$2',[u.id,row.id]);return {following:data.following};
     }
-    default: fail('unknown_action',404);
+    default: return executeModules(c,identity,action,data,{actor,live,canModerate,executePlatform});
   }
 }

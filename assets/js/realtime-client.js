@@ -16,6 +16,6 @@ export function watchRealtime({getUser,liveId,onSnapshot,onError=()=>{},fetchImp
    const response=await fetchImpl('/api/v1/events'+(liveId?'?liveId='+encodeURIComponent(liveId):''),{headers:{Authorization:'Bearer '+token},cache:'no-store',signal:controller.signal});
    if(!response.ok||!response.body)throw Error('realtime_unavailable');delay=500;
    await consumeEvents(response.body,data=>{if(getUser()?.uid!==user.uid)throw Error('authentication_changed');if(!stopped)onSnapshot(data);},controller.signal);
- }catch(e){if(!stopped){onError(e);delay=Math.min(delay*2,30000);}}finally{if(!stopped)timer=setTimeout(connect,delay);}}
+ }catch(e){if(e.message==='authentication_changed'){stopped=true;controller.abort();}if(!stopped){onError(e);delay=Math.min(delay*2,30000);}}finally{if(!stopped)timer=setTimeout(connect,delay);}}
  void connect();return ()=>{stopped=true;clearTimeout(timer);controller.abort();};
 }

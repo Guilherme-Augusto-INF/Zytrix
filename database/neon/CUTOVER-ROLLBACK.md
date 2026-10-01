@@ -1,36 +1,40 @@
-# Reconciliation and reversal procedure
+# Reconciliation and reversal — updated 2026-10-01
 
-Production cutover is blocked. This procedure is preparation, not authorization to execute it.
+Production cutover is prohibited in this mission. **Code concluded: NO; staging concluded: NO; ready for cutover: NO; production migrated: NO.** PR #11 remains Draft.
 
-## Current staging boundary
+## Verified staging boundary
 
-Project `soft-water-98807259`, branch `br-wispy-scene-b6325si6`, database `neondb`. Scripts validate the exact staging endpoint and verified TLS. The application uses `zytrix_staging_app`, never the database owner. API writes require the staging flag and are refused under `VERCEL_ENV=production`. Legacy Firebase mutations are blocked when staging is enabled or its configuration cannot be loaded.
+Project soft-water-98807259, branch br-wispy-scene-b6325si6, database neondb; direct endpoint ep-ancient-recipe-b65mlsad.c-2.sa-east-1.aws.neon.tech. All database tests validate the pinned staging endpoint with verified TLS. The application uses zytrix_staging_app, not the database owner. Its pool rejects any other role, bounds connections/timeouts and releases clients.
 
-The original import contains 328 rows across 17 populated tables, from 295 Firestore documents and 22 Auth accounts. Quarantined orphan records, withheld invalid alerts and username decisions remain in the private export/review directory. Eight historical wallet balances retain the user-confirmed manual adjustments; the migration does not fabricate transactions to explain them. Fourteen missing wallets were not automatically initialized.
+Production refuses the platform and sandbox payment handlers even if staging flags are supplied. Original screens choose one backend at page load; unavailable staging configuration does not select Firebase. No production Firebase change, main merge, production deploy, domain alteration or Stripe live enabling occurred. PR #16 was not changed.
 
-## Final reconciliation gate
+Migrations 009, 010 and 011 were applied only to staging; 001–008 were not rewritten. They add original-screen/Auth grants and disabled-account support, append the catalog and restore three missing canonical category parents. The local Auth callback origin was authorized only on staging. No identity/profile/wallet/ledger reconciliation write was performed.
 
-1. Preserve the original private export and verified local backup. Obtain an agreed write-freeze window before a production cutover. Current exports are sequential snapshots and do not establish a consistent final cutover point.
-2. Export fresh Auth metadata and Firestore documents into a new private directory. Never commit these files. Compare document paths and canonical field values with the previous approved snapshot, including deleted records and changed account status.
-3. The 2026-09-26 read-only export found 297 documents: two added followed-category documents and two changed documents (channel live state and stream status/end time). No documents were removed; Auth identity count remained 22. This delta has NOT been applied. The original snapshot reconciliation still passes, which does not imply reconciliation with the current source.
-4. Transform and validate the new snapshot with the same approved remediations. Review the delta against staging edits before applying anything: never overwrite newer PostgreSQL wallet/profile changes blindly. Use an explicit transaction and a private pre-change snapshot for each affected row.
-5. Reconcile exact row values, identity mapping, FKs, visibility, per-wallet balances, purchase/support totals and quarantine counts. Record expected manual adjustments separately. Counts alone are insufficient. Require zero unexplained financial differences and no unreviewed delta.
-6. Repeat restricted-role integration, authentication, browser, webhook delivery, concurrent transfer and load tests. Complete the module inventory and Neon Auth preservation gates. Obtain explicit production approval only after the evidence is reviewable.
+## Data evidence and delta
+
+Historical approved import: 328 rows across 17 populated tables, from 295 Firestore documents and 22 Auth accounts. Eight wallet balances retain user-approved historical manual adjustments; do not fabricate ledger entries to explain those adjustments. Fourteen originally missing wallets were not automatically initialized by login.
+
+The Sept 26 read-only source delta was two new followed-category documents and two changed channel/live-state documents; zero removals, 22 Auth identities. That delta is still unapplied and is not a current source snapshot.
+
+This execution's read-only staging checks found 22 internal identities, eight wallets, zero Neon Auth users/links and zero governance rows. Browser public feed reads the existing staging snapshot. Firebase CLI has no authorized account; previous private source exports and C:\\Stripe are unavailable in this workspace. A public REST read of governance/config returned NOT_FOUND. A fresh whole-source Auth/Firestore delta, identity/profile/wallet comparison and final reconciliation are **NOT VERIFIED**. No newer staging data was overwritten to force counts to match.
+
+Disposable integration data was rolled back. The concurrent-money test used committed, uniquely identified staging fixtures and two direct runtime-role connections; all its fixtures were removed. The known historical eight wallets/22 identities remain.
+
+## Remaining staging and cutover gates
+
+1. Finish retention-safe original account deletion and managed Auth/session cleanup.
+2. Supply authoritative policy/report/signup configuration. Current policy documents are ineffective drafts; do not invent released versions or acceptances.
+3. Complete real managed email login/verification/reset/logout/account-switch and dual-proof linking, preserving all existing UUIDs. Resolve the staging Google shared-client redirect_uri_mismatch; do not edit production OAuth.
+4. Configure a real Stripe sandbox API key/signing secret and staging origin/verified webhook route. Complete the application's hosted Checkout → signed raw-body webhook → PostgreSQL idempotent wallet-credit flow. Local signature/simulated fulfillment and concurrency tests have passed; external delivery has not.
+5. Obtain an authorized fresh source snapshot and approved prior private remediations. First produce a per-path/per-field delta, including disabled/deleted identities and private balances/ledger. Review against newer PostgreSQL writes before any safe staging transaction.
+6. Reconcile identity mappings, profiles, financial totals/ledger/manual adjustments, ownership/visibility, FKs and quarantine decisions. Zero unexplained financial differences are required.
+7. Validate authenticated critical flows in the original V1 screens with a real Neon session. The public local smoke is not equivalent to this gate.
+8. A final consistent source snapshot/write-freeze and production cutover require a separate explicit approval. Do not execute them here.
 
 ## Reversal without data loss
 
-If staging validation fails, stop the preview and disable `ZYTRIX_POSTGRES_STAGING`/`ZYTRIX_STRIPE_SANDBOX`. Stop new writers before investigating. Preserve logs privately with secrets and personal data excluded from shared reports.
+For failed staging validation, stop the preview/disable ZYTRIX_POSTGRES_STAGING and ZYTRIX_STRIPE_SANDBOX, stop writers and retain private evidence. Keep credentials/exports outside Git.
 
-The pre-change application reference is commit `e8ac4d6f490acd3b20b2c42c13af850798f11834`. Revert reviewed application commits on the migration branch when needed; do not reset unrelated working changes. Migrations 008 and the staging Auth schema are additive. Leave them in place during an application rollback; dropping them is unnecessary and can destroy evidence.
+The starting application reference for this execution is 7b2b1cf93bcefedea571c0a9b861a38bb8ea77fb. Revert reviewed migration-branch commits if needed; do not reset unrelated work. Additive schemas/grants/catalog and Auth links can remain during a code rollback; dropping them would lose evidence. Do not run the full importer over a populated database.
 
-Do not rerun the full importer over a populated database. Restore a private staging backup into a separately verified staging recovery branch, reconcile it, and switch only a staging connection after review. Do not delete the active branch or restore production automatically.
-
-After a future production cutover, a code rollback alone cannot safely return to Firebase: new PostgreSQL writes and external payments would be missing there. Freeze writes, reconcile the post-cutover delta, and decide how to retain those writes before any backend switch. Never replay payment fulfillment or alter ledger history to force balances to match.
-
-## External setup still needed
-
-- Stripe sandbox webhook signing secret and a verified delivery route to the staging handler. `C:\Stripe` contains a usable test API key but no signing secret. No live payments are enabled.
-- A real authenticated browser session available for controlled end-to-end validation. External-browser login does not by itself establish a session in the inspectable preview.
-- The account enrollment/communication decisions described in `AUTH-TRANSITION.md`, if supported password import cannot be established.
-
-Remaining module implementation is development work, not a user permission blocker. See `MODULE-AUDIT.md` and `MISSION-EVIDENCE-20260926.md`.
+Use a reviewed private staging backup in a separately verified recovery branch if recovery is necessary. Never delete the active branch or restore production automatically. After a future cutover, a code-only return to Firebase would omit new PostgreSQL writes and payments: freeze and reconcile the post-cutover delta before any backend switch.

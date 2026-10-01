@@ -149,24 +149,4 @@ export function escapeAttr(value = '') {
     return escapeHtml(value);
 }
 
-export const categories = {
-    Gaming: ['Ação / Aventura', 'RPG', 'Esportes', 'Simulação'],
-    Música: ['Rock', 'Sertanejo', 'Eletrônica', 'Funk'],
-    'Just Chatting': ['Bate-Papo', 'Perguntas e Respostas', 'Histórias', 'Desafios'],
-    Criatividade: ['Desenho', 'Design', 'Fotografia', 'Edição'],
-    Esportes: ['Futebol', 'Basquete', 'Automobilismo', 'Lutas'],
-    Tecnologia: ['Programação', 'Hardware', 'Inteligência Artificial', 'Ciência e Tech'],
-    Podcasts: ['Conversas', 'Entrevistas', 'Notícias', 'Entretenimento'],
-    IRL: ['Viagens', 'Eventos', 'Vida Cotidiana', 'Exploração']
-};
-
-export const icons = {
-    Gaming: '🎮',
-    Música: '🎵',
-    'Just Chatting': '🎙️',
-    Criatividade: '🎨',
-    Esportes: '⚽',
-    Tecnologia: '💻',
-    Podcasts: '🎧',
-    IRL: '📹'
-};
+export {categories,icons} from './categories-data.js';

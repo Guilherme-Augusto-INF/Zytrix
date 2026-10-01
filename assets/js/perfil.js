@@ -1,3 +1,5 @@
+import {platformSource,ownPlatform} from './platform-backend.js';
+import {recoveryPayload} from './staging-recovery.js';
 import { auth, db, googleProvider, onAuthStateChanged, EmailAuthProvider, reauthenticateWithPopup, reauthenticateWithCredential, deleteUser, doc, getDoc, getDocs, deleteDoc, onSnapshot, updateDoc, query, collection, collectionGroup, where, limit, serverTimestamp, writeBatch } from './firebase.js';
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
@@ -41,6 +43,10 @@ async function load() {
         getDoc(doc(db, 'wallets', user.uid)),
         getDoc(doc(db, 'channels', user.uid))
     ]);
+    if(!profileSnap.exists()&&await platformSource.staging()){
+      root.innerHTML='<section class="card panel"><h1>Recuperar perfil</h1><p>Escolha um nome público. Seu ID e sua carteira serão preservados.</p><form id="recover-original-profile"><input name="username" class="input" minlength="2" maxlength="30" required><label><input name="confirm" type="checkbox" required> Confirmo a criação do meu perfil.</label><button class="btn btn-primary">Criar perfil</button><p role="status"></p></form></section>';
+      const form=root.querySelector('form');form.onsubmit=async event=>{event.preventDefault();try{const fields=new FormData(form);await ownPlatform(user.uid,'profile.recover',recoveryPayload(fields.get('username'),'',fields.get('confirm')==='on'));await load();}catch{form.querySelector('[role=status]').textContent='Não foi possível recuperar o perfil. Verifique seu e-mail e o nome escolhido.';}};return;
+    }
     profile = profileSnap.exists() ? profileSnap.data() : null;
     account = accountSnap.exists() ? accountSnap.data() : null;
     wallet = walletSnap.exists() ? walletSnap.data() : null;
@@ -386,6 +392,7 @@ async function collectAccountRefs(uid) {
     return refs;
 }
 async function deleteAccount() {
+    if(await platformSource.staging()){document.querySelector('#delete-account-msg').textContent='Exclusão de conta ainda indisponível no staging. Seu perfil e registros financeiros foram preservados.';return;}
     const message = document.querySelector('#delete-account-msg');
     const button = document.querySelector('#delete-account');
     const confirmation = window.prompt('Esta ação é permanente. Digite EXCLUIR para confirmar:');

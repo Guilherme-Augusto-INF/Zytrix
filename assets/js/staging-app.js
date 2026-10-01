@@ -1,6 +1,6 @@
 import {watchRealtime} from './realtime-client.js';
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
+import {auth as backendAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut} from './firebase.js';
+
 import { createPlatformClient } from './staging-client.js';
 import { getStreamingEmbed } from './streaming.js';
 import { safeStreamingUrl } from './security.js';
@@ -83,7 +83,7 @@ async function watch(root,liveId,current){const {live,permissions,channelId}=awa
  await call('support.send',{liveId,...payload,requestKey:supportKey});supportKey=crypto.randomUUID();supportPayload=undefined;support.reset();status.textContent='Apoio enviado no staging.';});const amount=field(support,'Quantidade','amount','1','number');amount.min=1;amount.max=100000;amount.step=1;field(support,'Mensagem','message','','text',false).maxLength=120;root.append(finish(support));}
 }
 try{const response=await fetch('/api/v1/config',{cache:'no-store'});if(!response.ok||!(await response.json()).postgresStaging)throw Error('disabled');
- auth=getAuth(initializeApp({apiKey:'AIzaSyDLUogDD_G98mDO7SqEA_U6JX1HlRuseUE',authDomain:'zytrix-ca4f2.firebaseapp.com',projectId:'zytrix-ca4f2'},'staging-validation'));
+ auth=backendAuth;
  call=createPlatformClient(()=>auth.currentUser);
  login.addEventListener('submit',async event=>{event.preventDefault();const data=new FormData(login),submit=login.querySelector('button');submit.disabled=true;try{await signInWithEmailAndPassword(auth,data.get('email'),data.get('password'));login.reset();}catch{status.textContent='Não foi possível entrar com esta conta.';}finally{submit.disabled=false;}});
  document.querySelector('#logout').addEventListener('click',()=>signOut(auth).catch(report));navigation.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>page(b.dataset.page)));

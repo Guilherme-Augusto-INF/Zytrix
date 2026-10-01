@@ -14,7 +14,7 @@ export default async function handler(req,res){
     const order=await prepareOrder(c,identity,data);await c.query('commit');
     const session=await stripe.checkout.sessions.create({mode:'payment',payment_method_types:['card'],
       line_items:[{price_data:{currency:'brl',unit_amount:order.price_cents,product_data:{name:`${order.coins} Zy Coins · sandbox`}},quantity:1}],
-      client_reference_id:order.id,metadata:{zytrixOrderId:order.id},success_url:origin+'/staging.html?payment=complete',cancel_url:origin+'/staging.html?payment=cancelled'},
+      client_reference_id:order.id,metadata:{zytrixOrderId:order.id},success_url:origin+'/pagamento.html?payment=complete',cancel_url:origin+'/pagamento.html?payment=cancelled'},
       {idempotencyKey:order.idempotency_key});
     if(session.livemode!==false||!session.url?.startsWith('https://checkout.stripe.com/'))throw new ApiError('invalid_sandbox_session',503);
     await c.query('update public.zy_coin_orders set provider_reference=$2 where id=$1 and status=$3',[order.id,session.id,'pending']);

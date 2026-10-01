@@ -7,9 +7,12 @@ footer();
 const form = document.querySelector('form[data-auth-form]');
 const msg = document.querySelector('#message');
 const mode = form?.dataset.mode;
+function show(text, type = 'err') { if (!msg) return; msg.textContent = text; msg.className = `message ${type}`; msg.classList.remove('hidden'); }
+const staging=(await import('./backend-source.js')).createBackendSource();
+if(await staging.staging()){
+ const {initNeonAuthPage}=await import('./neon-auth-page.js');initNeonAuthPage(form,show);
+}else{
 await prepareAcceptance(form);
-function show(text, type = 'err') { if (!msg)
-    return; msg.textContent = text; msg.className = `message ${type}`; msg.classList.remove('hidden'); }
 function googleAuthMessage(error) {
     const code = String(error?.code || '');
     if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request')
@@ -103,3 +106,5 @@ googleButton?.addEventListener('click', async () => {
         googleButton.disabled = false;
     }
 });
+
+}

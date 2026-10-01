@@ -21,17 +21,20 @@ try{
  await client.query('insert into public.identities(id,firebase_uid) values($1,$2)',[adminId,adminUid]);
  await client.query('insert into public.admins(user_id) values($1)',[adminId]);
  await client.query(`insert into public.governance_config(singleton,reports_enabled,rules_version,terms_version,privacy_version,terms_effective)
- values(true,false,'fixture','fixture','fixture',true) on conflict(singleton) do update set rules_version='fixture',terms_version='fixture',privacy_version='fixture',terms_effective=true`);
+ values(true,true,'governance-1','fixture','fixture',true) on conflict(singleton) do update set reports_enabled=true,rules_version='governance-1',terms_version='fixture',privacy_version='fixture',terms_effective=true`);
  await client.query(`insert into public.user_accounts(user_id,firebase_uid,zytrix_id,email,provider)
    values($1,$2,$3,$4,'password')`,[a,uidA,'ZY-'+randomUUID().replaceAll('-','').slice(0,12),'test-'+randomUUID()+'@example.invalid']);
  await client.query("insert into public.channels(id,firebase_id,owner_id,name,slug) values($1,$2,$3,'Integration test',$4)",[channel,uidB,b,'test-'+randomUUID()]);
  await client.query("insert into public.lives(id,firebase_id,channel_id,owner_id,title,playback_url,status,started_at) values($1,$2,$3,$4,'Integration test','https://www.twitch.tv/test','live',now())",[stream,streamId,channel,b]);
  await client.query('insert into public.wallets(user_id,balance) values($1,100),($2,0)',[a,b]);
- if(process.argv.includes('--runtime-role'))await client.query('set local role zytrix_staging_app');
+ const neonSubject=randomUUID();
+ await client.query('insert into neon_auth."user"(id,name,email,"emailVerified") values($1,$2,$3,true)',[neonSubject,'Fixture','fixture-'+randomUUID()+'@example.invalid']);
+ await client.query("insert into private.external_auth_identities(provider,subject,user_id) values('neon',$1,$2)",[neonSubject,a]);
+ if(process.argv.includes('--runtime-role')){await client.query('set local role zytrix_staging_app');assert.equal((await client.query('select current_user as role')).rows[0].role,'zytrix_staging_app');}
  const userA={uid:uidA,emailVerified:true};const userB={uid:uidB,emailVerified:true};
  const admin={uid:adminUid,emailVerified:true};
  const newUser={uid:'fixture-register-'+randomUUID(),emailVerified:true,email:'registration@example.invalid',provider:'password'};
- const registration={username:'new_'+randomUUID().slice(0,18),acceptPolicies:true,termsVersion:'fixture',privacyVersion:'fixture',rulesVersion:'fixture'};
+ const registration={username:'new_'+randomUUID().slice(0,18),acceptPolicies:true,termsVersion:'fixture',privacyVersion:'fixture',rulesVersion:'governance-1'};
  await assert.rejects(executePlatform(client,newUser,'account.register',{...registration,acceptPolicies:false}),e=>e.code==='policy_acceptance_required');
  assert.equal((await executePlatform(client,newUser,'account.register',registration)).registered,true);
  await assert.rejects(executePlatform(client,newUser,'account.register',registration),e=>e.code==='account_already_exists');
@@ -123,6 +126,84 @@ try{
  await assert.rejects(executePlatform(client,userB,'profile.update',{username:'missing-fixture',bio:''}),e=>e.code==='profile_missing');
  checks.push('profile rename cooldown and deliberately missing profile preserved');
 
+
+ const neonIdentity={uid:neonSubject,subject:neonSubject,authProvider:'neon',emailVerified:true};
+ assert.equal((await executePlatform(client,neonIdentity,'auth.identity')).uid,uidA);
+ assert.equal((await executePlatform(client,neonIdentity,'me')).account.zytrixId,(await executePlatform(client,userA,'me')).account.zytrixId);
+ await assert.rejects(executePlatform(client,{...neonIdentity,subject:randomUUID()},'wallet.get'),e=>e.code==='account_not_migrated');
+ checks.push('Neon subject maps to preserved internal identity; unknown subject has no private access');
+ const read=async(user,path,constraints=[])=>executePlatform(client,user,'documents.read',{path,constraints});
+ const write=async(user,path,data,operation='set')=>executePlatform(client,user,'documents.write',{path,data,operation});
+ await assert.rejects(read(userB,['wallets',uidA]),e=>e.status===403);
+ await assert.rejects(write(userA,['wallets',uidA],{balance:999999}),e=>e.code==='financial_action_required');
+ await assert.rejects(write(userB,['profiles',uidA],{username:'Stolen'}),e=>e.status===403);
+ assert.equal((await read(userA,['users',uidA])).documents[0].id,uidA);
+ assert.ok((await read(admin,['users'])).documents.length>=1);
+ checks.push('original screen adapter isolates private accounts, balances and ownership');
+ await write(userB,['channels',uidB],{categoryId:category,avatarURL:'https://firebasestorage.googleapis.com/avatar.webp',bannerURL:'https://firebasestorage.googleapis.com/banner.webp'});
+ assert.equal((await read(userB,['channels',uidB])).documents[0].avatarURL,'https://firebasestorage.googleapis.com/avatar.webp');
+ await assert.rejects(write(userB,['channels',uidB],{categoryId:'nonexistent-category'}),e=>e.code==='invalid_category');
+ await write(userB,['streams',streamId],{title:'Original screen fixture',categoryId:category,vodURL:'https://www.youtube.com/watch?v=dQw4w9WgXcQ',supportGoalCoins:100,supportAlertTheme:'classic',supportAlertDurationMs:4200},'update');
+ assert.equal((await read(userB,['streams',streamId])).documents[0].supportGoalCoins,'100');
+ await write(userB,['channels',uidB,'members',uidA],{uid:uidB});
+ assert.equal((await read(userB,['channels',uidB,'members',uidA])).documents[0].uid,uidA);
+ await write(userB,['channels',uidB,'members',uidA],{},'delete');
+ await write(userB,['streams',streamId,'moderators',uidA],{});
+ await write(userB,['streams',streamId,'moderators',uidA],{},'delete');
+ await write(userB,['channelProfiles',uidB],{about:'Fixture only',games:'Testing',website:'https://example.com'});
+ assert.equal((await read(userA,['channelProfiles',uidB])).documents[0].about,'Fixture only');
+ const code='test_'+randomUUID().replaceAll('-','').slice(0,12);
+ await write(userB,['creatorCodes',code],{creatorUid:uidA});
+ await assert.rejects(write(userA,['creatorCodes',code],{}),e=>e.code==='creator_code_conflict');
+ await executePlatform(client,userA,'attribution.set',{code,creatorUid:uidA});
+ await write(userB,['creatorCodes',code],{},'delete');
+ checks.push('original creator configuration validates categories/URLs, persists images and isolates members, moderators and creator codes');
+ await executePlatform(client,userA,'viewer.heartbeat',{liveId:streamId});
+ const rewardProgress=await executePlatform(client,userA,'progress.record',{liveId:streamId});assert.equal(rewardProgress.skipped,false);
+ assert.equal((await executePlatform(client,userA,'progress.record',{liveId:streamId})).skipped,true);
+ assert.equal(BigInt((await executePlatform(client,userA,'progress.get')).progress.xp),10n);
+ checks.push('watch progress requires live presence and credits one reward per server interval');
+ const scheduleId=randomUUID(),rewardId=randomUUID(),pollId=randomUUID();
+ await write(userB,['channels',uidB,'schedule',scheduleId],{title:'Fixture schedule',startsAt:new Date(Date.now()+3600000).toISOString()});
+ assert.equal((await read(userA,['channels',uidB,'schedule'])).documents[0].id,scheduleId);
+ await assert.rejects(write(userA,['channels',uidB,'schedule',scheduleId],{},'delete'),e=>e.status===403);
+ await write(userB,['channels',uidB,'rewards',rewardId],{title:'Fixture reward',cost:10});
+ const redemptionKey=randomUUID(),beforeReward=BigInt((await executePlatform(client,userA,'wallet.get')).wallet.balance);
+ const redemption=await executePlatform(client,userA,'reward.redeem',{liveId:streamId,rewardId,requestKey:redemptionKey,cost:1,uid:uidB});
+ assert.equal(BigInt((await executePlatform(client,userA,'wallet.get')).wallet.balance),beforeReward-10n);
+ assert.equal((await executePlatform(client,userA,'reward.redeem',{liveId:streamId,rewardId,requestKey:redemptionKey})).replayed,true);
+ await assert.rejects(write(userA,['rewardRedemptions',redemption.id],{status:'fulfilled'},'update'),e=>e.status===403);
+ await write(userB,['rewardRedemptions',redemption.id],{status:'fulfilled'},'update');
+ checks.push('schedules/rewards enforce owner rights; redemption uses server cost and one atomic ledger debit');
+ await write(userB,['streams',streamId,'polls',pollId],{kind:'poll',question:'Fixture question',option0:'Yes',option1:'No'});
+ await executePlatform(client,userA,'poll.vote',{liveId:streamId,pollId,optionIndex:0,count0:500});
+ assert.equal((await executePlatform(client,userA,'poll.vote',{liveId:streamId,pollId,optionIndex:1})).replayed,true);
+ const poll=(await read(userA,['streams',streamId,'polls'])).documents[0];assert.equal(BigInt(poll.count0),1n);assert.equal(BigInt(poll.count1),0n);
+ await write(userB,['streams',streamId,'polls',pollId],{status:'resolved',resultIndex:0},'update');
+ await assert.rejects(executePlatform(client,userA,'poll.vote',{liveId:streamId,pollId,optionIndex:0}),e=>e.code==='poll_closed');
+ checks.push('poll options and counters are authoritative; one vote per account; closed poll rejects voting');
+ const promoId=randomUUID();
+ await assert.rejects(write(userA,['coinPromotions',promoId],{}),e=>e.status===403);
+ await write(admin,['coinPromotions',promoId],{title:'Fixture promotion',amount:5,maxClaims:1,startsAt:new Date(Date.now()-10000).toISOString(),endsAt:new Date(Date.now()+3600000).toISOString()});
+ const beforePromo=BigInt((await executePlatform(client,userA,'wallet.get')).wallet.balance);
+ await executePlatform(client,userA,'promotion.claim',{promotionId:promoId,amount:99999});
+ assert.equal((await executePlatform(client,userA,'promotion.claim',{promotionId:promoId})).replayed,true);
+ assert.equal(BigInt((await executePlatform(client,userA,'wallet.get')).wallet.balance),beforePromo+5n);
+ await assert.rejects(executePlatform(client,userB,'promotion.claim',{promotionId:promoId}),e=>e.code==='promotion_unavailable');
+ checks.push('promotions enforce administrator ownership, server amount, per-account and global limits');
+ const clipId=randomUUID();await write(userA,['clips',clipId],{streamId,title:'Fixture clip',momentSeconds:12,streamerUid:uidA,creatorUid:uidB,sourceUrl:'https://evil.invalid'});
+ const clip=(await read(null,['clips',clipId])).documents[0];assert.equal(clip.streamerUid,uidB);assert.equal(clip.creatorUid,uidA);assert.equal(clip.sourceUrl,'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+ checks.push('clip creation derives creator, owner, source URL and visibility on server');
+ const report=await executePlatform(client,userA,'reports.submit',{targetType:'stream',targetId:streamId,contextId:'-',reason:'spam',description:'Fixture only'});
+ await assert.rejects(executePlatform(client,userB,'reports.close',{id:report.id,resolution:'reviewed'}),e=>e.status===403);
+ assert.equal((await read(userB,['reports',report.id])).documents.length,0);
+ await executePlatform(client,admin,'reports.close',{id:report.id,resolution:'reviewed'});
+ checks.push('report submission/closure enforces target visibility, private reporter data and administrator audit');
+ await read(userB,['channels',uidB,'members']);
+ await assert.rejects(read(userA,['channels',uidB,'members']),e=>e.status===403);
+ for(const path of [['channels'],['channels',uidB,'followers'],['streams'],['streams',streamId],['streams',streamId,'chatSettings','main'],['streams',streamId,'chatConfig','main'],['streams',streamId,'moderators'],['streams',streamId,'chatBans'],['streams',streamId,'supportAlerts'],['streams',streamId,'reactions'],['creatorCodes'],['categories'],['governance','config'],['moderationPenalties'],['moderationActions'],['zyCoinOrders'],['rewardRedemptions']])await read(admin,path);
+ checks.push('original V1 read contracts execute with restricted runtime role');
+
  // The public view cannot expose private lives, even to anonymous callers.
  await client.query("insert into public.profiles(user_id,username) values($1,$2)",[b,'staging_'+randomUUID().replaceAll('-','').slice(0,18)]);
  let feed=await executePlatform(client,null,'live.feed',{});
@@ -148,4 +229,4 @@ try{
  checks.push('simulated sandbox payment rejects wrong amount and credits once; no Stripe network payment');
  await client.query('rollback');await writeFile(reportFile,JSON.stringify({status:'PASS',checks,fixtures:'ROLLED_BACK'},null,2));
  console.log(JSON.stringify({status:'PASS',checks:checks.length,fixtures:'ROLLED_BACK'}));
-}catch(e){await client.query('rollback').catch(()=>{});const permission=e.code==='42501'&&/^permission denied for (table|schema) [a-z_]+$/.test(e.message)?e.message:undefined;await writeFile(reportFile,JSON.stringify({status:'FAIL',checks,code:e.code??e.name,permission,fixtures:'ROLLED_BACK'},null,2));console.log(JSON.stringify({status:'FAIL',code:e.code??e.name,permission}));process.exitCode=1;}finally{await client.end();}
+}catch(e){await client.query('rollback').catch(()=>{});const permission=e.code==='42501'&&/^permission denied for (table|schema) [a-z_]+$/.test(e.message)?e.message:undefined;await writeFile(reportFile,JSON.stringify({status:'FAIL',checks,code:e.code??e.name,message:e.message,stack:e.stack,permission,fixtures:'ROLLED_BACK'},null,2));console.log(JSON.stringify({status:'FAIL',code:e.code??e.name,permission}));process.exitCode=1;}finally{await client.end();}

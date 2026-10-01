@@ -109,7 +109,7 @@ async function firebase_savePlatformPreferences(uid, patch = {}) {
   await setDoc(doc(db, 'users', uid, 'preferences', 'platform'), allowed, { merge: true });
 }
 
-export async function recordWatchProgress(uid, streamId) {
+async function firebase_recordWatchProgress(uid, streamId) {
   if (!uid || !streamId) return null;
   const presence = await getDoc(doc(db, 'streams', streamId, 'viewers', uid)).catch(() => null);
   const seenAt = presence?.exists?.() ? timestampMs(presence.data().lastSeen) : 0;
@@ -150,7 +150,7 @@ export async function recordWatchProgress(uid, streamId) {
   });
 }
 
-export function watchProgress(uid, callback, onError) {
+function firebase_watchProgress(uid, callback, onError) {
   if (!uid) {
     callback(null);
     return () => {};
@@ -184,7 +184,7 @@ function firebase_watchFollowedCategories(uid, callback, onError) {
   }, onError);
 }
 
-export async function saveCreatorAttribution(uid, code, creatorUid) {
+async function firebase_saveCreatorAttribution(uid, code, creatorUid) {
   if (!uid) throw new Error('auth-required');
   if (!code || !creatorUid) {
     await deleteDoc(doc(db, 'users', uid, 'creatorAttribution', 'current'));
@@ -265,4 +265,17 @@ export async function getDiscoveryContext(uid) {
     return {following:following.docs.map(d=>d.id),history:history.docs.map(d=>({id:d.id,...d.data()}))
       .sort((a,b)=>(b.watchedAt?.seconds??0)-(a.watchedAt?.seconds??0)).slice(0,50)};
   });
+}
+
+export async function recordWatchProgress(uid,streamId) {
+ if(!uid||!streamId)return null;
+ return platformSource.run(()=>ownPlatform(uid,'progress.record',{liveId:streamId}),()=>firebase_recordWatchProgress(uid,streamId));
+}
+export function watchProgress(uid,callback,onError) {
+ if(!uid){callback(null);return ()=>{};}
+ return platformSource.watch({neon:async()=>(await ownPlatform(uid,'progress.get')).progress,
+  firebase:(next,error)=>firebase_watchProgress(uid,next,error),onData:callback,onError});
+}
+export async function saveCreatorAttribution(uid,code,creatorUid) {
+ return platformSource.run(()=>ownPlatform(uid,'attribution.set',{code:String(code||'').toLowerCase()}),()=>firebase_saveCreatorAttribution(uid,code,creatorUid));
 }

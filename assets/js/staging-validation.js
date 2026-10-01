@@ -1,5 +1,4 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
+import {auth as backendAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut} from './firebase.js';
 import { createPlatformClient } from './staging-client.js';
 import { canRecoverProfile, recoveryPayload } from './staging-recovery.js';
 
@@ -17,11 +16,7 @@ let auth;
 try {
   const response = await fetch('/api/v1/config', { cache: 'no-store' });
   if (!response.ok || (await response.json()).postgresStaging !== true) throw new Error('staging_disabled');
-  auth = getAuth(initializeApp({
-    apiKey: 'AIzaSyDLUogDD_G98mDO7SqEA_U6JX1HlRuseUE',
-    authDomain: 'zytrix-ca4f2.firebaseapp.com',
-    projectId: 'zytrix-ca4f2'
-  }, 'staging-validation'));
+  auth = backendAuth;
   const call = createPlatformClient(() => auth.currentUser);
 
   async function showFeed() {

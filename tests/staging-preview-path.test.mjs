@@ -4,10 +4,14 @@ import {resolve} from 'node:path';
 import {resolveSafePreviewPath} from '../scripts/staging-static-path.mjs';
 
 const root=resolve('hypothetical-zytrix-checkout');
-test('local staging preview serves only its isolated HTML and assets',()=>{
-  assert.equal(resolveSafePreviewPath(root,'/'),resolve(root,'staging-validation.html'));
+test('local staging preview serves original V1 HTML screens and assets',()=>{
+  assert.equal(resolveSafePreviewPath(root,'/'),resolve(root,'index.html'));
+  for(const page of ['perfil','login','registro','config-live','creator-center','pagamento','clips'])
+    assert.equal(resolveSafePreviewPath(root,'/'+page+'.html'),resolve(root,page+'.html'));
   assert.equal(resolveSafePreviewPath(root,'/staging-validation.html'),resolve(root,'staging-validation.html'));
   assert.equal(resolveSafePreviewPath(root,'/staging.html'),resolve(root,'staging.html'));
+  for(const page of ['termos','privacidade','politicas','diretrizes-da-comunidade','denuncias-e-moderacao','conteudo-proibido'])
+    assert.equal(resolveSafePreviewPath(root,'/'+page),resolve(root,page+'.html'));
   assert.equal(resolveSafePreviewPath(root,'/assets/js/staging-validation.js'),
     resolve(root,'assets/js/staging-validation.js'));
   assert.equal(resolveSafePreviewPath(root,'/assets/css/staging-validation.css'),

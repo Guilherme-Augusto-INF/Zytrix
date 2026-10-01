@@ -1,3 +1,4 @@
+import {platformSource,publicPlatform} from './platform-backend.js';
 import {
   auth,
   db,
@@ -76,6 +77,11 @@ async function hydrateLives(base) {
 }
 
 async function loadClipsAndSchedule() {
+  if(await platformSource.staging()){
+    const [clipSnap,result]=await Promise.all([getDocs(query(collection(db,'clips'),orderBy('createdAt','desc'),limit(12))),publicPlatform('schedules.list')]);
+    clips=filterMature(clipSnap.docs.map(item=>({id:item.id,...item.data()})),preferences);
+    schedules=result.schedules.slice(0,8).map(s=>({...s,startsAt:{toDate:()=>new Date(s.startsAt)}}));return;
+  }
   const [clipSnap, channelSnap] = await Promise.all([
     getDocs(query(collection(db, 'clips'), orderBy('createdAt', 'desc'), limit(12))).catch(() => null),
     getDocs(collection(db, 'channels')).catch(() => null)

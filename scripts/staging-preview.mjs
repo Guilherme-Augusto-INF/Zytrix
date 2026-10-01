@@ -7,6 +7,8 @@ const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 if(!process.env.ZYTRIX_STAGING_DATABASE_URL_FILE)throw Error('Private runtime connection file required');
 process.env.ZYTRIX_STAGING_DATABASE_URL=(await readFile(process.env.ZYTRIX_STAGING_DATABASE_URL_FILE,'utf8')).trim();
 process.env.ZYTRIX_POSTGRES_STAGING='true';
+process.env.ZYTRIX_AUTH_PROVIDER='neon';
+process.env.ZYTRIX_NEON_AUTH_URL??=(await import('../server/neon/neon-token.mjs')).STAGING_AUTH_URL;
 const handlers={'/api/v1/platform':(await import('../api/v1/platform.js')).default,'/api/v1/config':(await import('../api/v1/config.js')).default};
 handlers['/api/v1/checkout']=(await import('../api/v1/checkout.js')).default;
 handlers['/api/v1/events']=(await import('../api/v1/events.js')).default;

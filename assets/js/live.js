@@ -1,3 +1,4 @@
+import {platformSource,ownPlatform,financialAction} from './platform-backend.js';
 import { auth, db, onAuthStateChanged, doc, getDoc, onSnapshot, collection, query, orderBy, limit, setDoc, deleteDoc, runTransaction, increment, serverTimestamp, Timestamp, ensureWallet } from './firebase.js';
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
 import { reportLink } from './report-link.js';
@@ -361,8 +362,8 @@ function startRealtimeChat() {
             .reverse();
         const hydrated = await Promise.all(messages.map(async (message) => ({
             ...message,
-            profile: await getCachedProfile(message.uid),
-            isAdmin: await isAdminUid(message.uid)
+            profile: message.username!==undefined?{username:message.username||'Usuário',photoURL:message.photoURL||''}:await getCachedProfile(message.uid),
+            isAdmin: message.isAdmin??await isAdminUid(message.uid)
         })));
         if (version !== chatRenderVersion)
             return;
@@ -588,6 +589,10 @@ async function support() {
         return;
     }
     try {
+        if(await platformSource.staging()) {
+            await financialAction(user.uid,'support.send',{liveId:stream.id,amount});
+            msg.textContent=`Apoio de ◈ ${amount.toLocaleString('pt-BR')} enviado!`;return;
+        }
         await ensureWallet(user.uid);
         const senderRef = doc(db, 'wallets', user.uid);
         const recipientRef = doc(db, 'wallets', stream.streamerUid);
