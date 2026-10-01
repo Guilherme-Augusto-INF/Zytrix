@@ -34,7 +34,7 @@ try{
  const userA={uid:uidA,emailVerified:true};const userB={uid:uidB,emailVerified:true};
  const admin={uid:adminUid,emailVerified:true};
  const newUser={uid:'fixture-register-'+randomUUID(),emailVerified:true,email:'registration@example.invalid',provider:'password'};
- const registration={username:'new_'+randomUUID().slice(0,18),acceptPolicies:true,termsVersion:'fixture',privacyVersion:'fixture',rulesVersion:'governance-1'};
+ const registration={username:'new_'+randomUUID().slice(0,18),acceptPolicies:true,stagingConsent:true,termsVersion:'fixture',privacyVersion:'fixture',rulesVersion:'governance-1'};
  await assert.rejects(executePlatform(client,newUser,'account.register',{...registration,acceptPolicies:false}),e=>e.code==='policy_acceptance_required');
  assert.equal((await executePlatform(client,newUser,'account.register',registration)).registered,true);
  await assert.rejects(executePlatform(client,newUser,'account.register',registration),e=>e.code==='account_already_exists');

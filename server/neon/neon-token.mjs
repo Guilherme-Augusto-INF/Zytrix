@@ -29,7 +29,7 @@ export function createNeonVerifier({baseUrl=STAGING_AUTH_URL, fetchImpl=fetch, n
       if(header.alg!=='EdDSA'||typeof header.kid!=='string'||header.kid.length>128||header.crit)return null;
       const time=Math.floor(now()/1000),origin=new URL(baseUrl).origin;
       if(claims.iss!==origin||!(claims.aud===origin||(Array.isArray(claims.aud)&&claims.aud.includes(origin))))return null;
-      if(!Number.isInteger(claims.exp)||claims.exp<=time||!Number.isInteger(claims.iat)||claims.iat>time+30||claims.exp-claims.iat>930)return null;
+      if(!Number.isInteger(claims.exp)||claims.exp<=time||!Number.isInteger(claims.iat)||claims.iat<0||claims.exp<=claims.iat||claims.iat>time+30||claims.exp-claims.iat>930)return null;
       if(claims.nbf!=null&&(!Number.isFinite(claims.nbf)||claims.nbf>time))return null;
       if(typeof claims.sub!=='string'||!claims.sub||claims.sub.length>128)return null;
       if(!keys||expires<=now())await refresh();

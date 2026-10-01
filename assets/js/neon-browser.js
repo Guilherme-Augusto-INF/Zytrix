@@ -6,7 +6,7 @@ export const auth={currentUser:null};
 export class GoogleAuthProvider {}
 export const EmailAuthProvider={credential:(email,password)=>({email,password})};
 export const firebaseConfig=null;
-const listeners=new Set();let configPromise,refreshPromise,generation=0,loaded=false;
+const listeners=new Set();let configPromise,refreshPromise,generation=0,loaded=false,jwtCache,jwtPending;
 const changes=globalThis.BroadcastChannel?new BroadcastChannel('zytrix-neon-session'):null;
 const platform=createPlatformClient(()=>auth.currentUser);
 async function config(){return configPromise??=fetch('/api/v1/config',{cache:'no-store'}).then(async r=>{const c=await r.json();if(!r.ok||!c.postgresStaging||c.authentication!=='neon'||!c.neonAuthUrl)throw Error('neon_auth_not_configured');return c;});}
@@ -15,6 +15,20 @@ export async function authRequest(path,body) {
  const value=await response.json();if(!response.ok)throw Object.assign(Error('authentication_failed'),{code:value.code??'authentication_failed',status:response.status});return value;
 }
 function notify(){for(const cb of listeners)cb(auth.currentUser);}
+async function sessionJwt(subject,sessionToken,emailVerified,force=false){
+ const key=subject+':'+sessionToken+':'+emailVerified;
+ if(auth.currentUser?.subject!==subject||auth.currentUser?.sessionToken!==sessionToken)throw Error('authentication_changed');
+ if(!force&&jwtCache?.key===key&&jwtCache.expires>Date.now()+60000)return jwtCache.token;
+ if(jwtPending?.key===key)return jwtPending.promise;
+ const entry={key};entry.promise=(async()=>{let token;
+  try{token=await authRequest('token');}catch(error){if(error.status===401&&auth.currentUser?.subject===subject){generation++;auth.currentUser=null;notify();}throw error;}
+  if(auth.currentUser?.subject!==subject||auth.currentUser?.sessionToken!==sessionToken||!token?.token)throw Error('authentication_changed');
+  // This check only prevents mixed-account UI. The API verifies the signature and active session.
+  let claims;try{claims=JSON.parse(atob(token.token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));}catch{throw Error('invalid_session_token');}
+  if(claims.sub!==subject||!Number.isFinite(claims.exp)||claims.exp*1000<=Date.now()){generation++;auth.currentUser=null;notify();throw Error('authentication_changed');}
+  jwtCache={key,token:token.token,expires:claims.exp*1000};return token.token;
+ })().finally(()=>{if(jwtPending===entry)jwtPending=null;});jwtPending=entry;return entry.promise;
+}
 export async function refreshSession(){
  if(localStorage.getItem('zytrixNeonSignedOut')){auth.currentUser=null;const initial=!loaded;loaded=true;if(initial)notify();return null;}
  if(refreshPromise)return refreshPromise;
@@ -23,12 +37,9 @@ export async function refreshSession(){
   if(!session?.user||session.user.banned){const changed=!!auth.currentUser||!loaded;auth.currentUser=null;loaded=true;if(changed)notify();return null;}
   const previous=auth.currentUser;
   const subject=session.user.id;
-  const candidate={uid:'neon:'+subject,subject,email:session.user.email,emailVerified:session.user.emailVerified===true,
+  const candidate={uid:'neon:'+subject,subject,sessionToken:session.session?.token,email:session.user.email,emailVerified:session.user.emailVerified===true,
    displayName:session.user.name,photoURL:session.user.image??'',providerData:[],enrollmentRequired:true,
-   async getIdToken(){if(auth.currentUser?.subject!==subject)throw Error('authentication_changed');let token;try{token=await authRequest('token');}catch(error){if(error.status===401&&auth.currentUser?.subject===subject){generation++;auth.currentUser=null;notify();}throw error;}if(auth.currentUser?.subject!==subject||!token?.token)throw Error('authentication_required');
-    // Client check only prevents mixed account UI; the server independently verifies the signature/claims.
-    let claims;try{claims=JSON.parse(atob(token.token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));}catch{throw Error('invalid_session_token');}
-    if(claims.sub!==subject||claims.exp*1000<=Date.now()){generation++;auth.currentUser=null;notify();throw Error('authentication_changed');}return token.token;},
+   getIdToken(force=false){return sessionJwt(subject,session.session?.token,session.user.emailVerified===true,force);},
    async reload(){const current=await refreshSession();if(current?.subject===subject)Object.assign(this,current);}};
   auth.currentUser=candidate;
   const result=await platform('auth.identity');if(version!==generation)return;
@@ -44,7 +55,7 @@ async function replaceSession(path,data){generation++;await authRequest(path,dat
 export async function signInWithEmailAndPassword(_auth,email,password){return replaceSession('sign-in/email',{email,password});}
 export async function createUserWithEmailAndPassword(_auth,email,password){return replaceSession('sign-up/email',{email,password,name:email.split('@')[0]});}
 export async function signInWithPopup(){const result=await authRequest('sign-in/social',{provider:'google',callbackURL:new URL('login.html',location.href).href});if(result.url){localStorage.removeItem('zytrixNeonSignedOut');location.assign(result.url);}throw Error('oauth_redirect');}
-export async function signOut(){generation++;localStorage.setItem('zytrixNeonSignedOut','true');auth.currentUser=null;loaded=true;notify();changes?.postMessage('changed');await authRequest('sign-out',{});}
+export async function signOut(){try{if(auth.currentUser)await platform('auth.logout');}finally{generation++;localStorage.setItem('zytrixNeonSignedOut','true');auth.currentUser=null;loaded=true;notify();changes?.postMessage('changed');await authRequest('sign-out',{});}}
 export async function sendEmailVerification(user){await authRequest('email-otp/send-verification-otp',{email:user.email,type:'email-verification'});}
 export async function sendPasswordResetEmail(_auth,email){await authRequest('request-password-reset',{email,redirectTo:new URL('recuperar-senha.html',location.href).href});}
 export async function reauthenticateWithCredential(_user,credential){return signInWithEmailAndPassword(auth,credential.email,credential.password);}
@@ -84,7 +95,7 @@ function snapshot(ref,documents){
  if(ref.type==='document')return single(values[0]);
  const docs=values.map(single);return {docs,size:docs.length,empty:!docs.length,forEach:fn=>docs.forEach(fn),docChanges:()=>docs.map(d=>({type:'added',doc:d}))};
 }
-export async function getDoc(ref){return snapshot(ref,(await platform('documents.read',{path:ref.path,constraints:ref.constraints})).documents);}
+export async function getDoc(ref){if(!loaded)await refreshSession();return snapshot(ref,(await platform('documents.read',{path:ref.path,constraints:ref.constraints})).documents);}
 export const getDocs=getDoc;
 const subscriptions=new Map(),transports=new Map();
 function liveTransport(owner,liveId,receive,onError){
@@ -97,11 +108,22 @@ function liveTransport(owner,liveId,receive,onError){
  return()=>{transport.clients.delete(client);if(!transport.clients.size){transport.stop();transports.delete(key);}};
 }
 export function onSnapshot(ref,callback,onError=console.error){
+ let stopped=false,inner,current;
+ const changed=()=>{if(stopped||!loaded)return;const owner=auth.currentUser?.subject??null;
+  if(inner&&current===owner)return;inner?.();current=owner;
+  // Never reopen another account's private document following an account switch.
+  if(['wallets','users'].includes(ref.path[0])&&ref.path[1]!==auth.currentUser?.uid){inner=null;return;}
+  inner=watchSnapshot(ref,callback,onError);
+ };
+ listeners.add(changed);changed();if(!loaded)void refreshSession().catch(()=>{});
+ return()=>{stopped=true;listeners.delete(changed);inner?.();};
+}
+function watchSnapshot(ref,callback,onError=console.error){
  const owner=auth.currentUser?.subject??null,key=JSON.stringify([owner,ref]);
  let state=subscriptions.get(key);
  if(!state){
   state={clients:new Set(),closed:false,previousIds:new Set()};subscriptions.set(key,state);
-  const errors=error=>{if(!state.closed)for(const client of state.clients)client.onError(error);};
+  const errors=error=>{if(!state.closed&&error.code!=='authentication_changed'&&error.message!=='authentication_changed')for(const client of state.clients)client.onError(error);};
   const receive=value=>{
    if(state.closed||(auth.currentUser?.subject??null)!==owner)return;
    const serialized=JSON.stringify(value.docs?value.docs.map(d=>[d.id,d.data()]):[value.id,value.data()]);if(serialized===state.signature)return;state.signature=serialized;

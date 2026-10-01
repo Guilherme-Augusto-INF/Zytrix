@@ -20,7 +20,7 @@ async function pay() { const msg = document.querySelector('#pay-msg'); if (!user
     if(neonPayment){
       const key='zytrix-checkout:'+user.uid+':'+pack.id;
       const requestKey=sessionStorage.getItem(key)||crypto.randomUUID();sessionStorage.setItem(key,requestKey);
-      const response=await fetch('/api/v1/checkout',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+await user.getIdToken()},body:JSON.stringify({packageId:pack.id,requestKey}),cache:'no-store',signal:AbortSignal.timeout(30000)});
+      const response=await fetch('/api/v1/checkout',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+await user.getIdToken(),...(user.sessionToken?{'X-Neon-Session':user.sessionToken}:{})},body:JSON.stringify({packageId:pack.id,requestKey}),cache:'no-store',signal:AbortSignal.timeout(30000)});
       const result=await response.json();if(!response.ok||result.sandbox!==true||!result.url?.startsWith('https://checkout.stripe.com/'))throw Error('checkout_unavailable');
       sessionStorage.removeItem(key);location.assign(result.url);return;
     }

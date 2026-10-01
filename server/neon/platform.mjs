@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { v5 as uuidv5 } from 'uuid';
+import {deleteAccount} from './account-lifecycle.mjs';
 import { safeStreamingUrl } from '../../assets/js/security.js';
 import { parseStreamingSource } from '../../assets/js/streaming.js';
 import {executeModules} from './modules.mjs';
@@ -14,6 +15,7 @@ const key = value => typeof value === 'string' && /^[A-Za-z0-9_-]{16,100}$/.test
 export async function actor(c, identity, verified = false) {
   if (!identity) fail('authentication_required', 401);
   if (verified && !identity.emailVerified) fail('verified_email_required', 403);
+  if(identity.authProvider==='neon')await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['account:'+identity.subject]);
   const r = identity.authProvider==='neon'?await c.query(`select i.id,i.firebase_uid,exists(select 1 from public.admins a where a.user_id=i.id and a.active) as admin
       from private.external_auth_identities e join public.identities i on i.id=e.user_id
       join public.user_accounts a on a.user_id=i.id join neon_auth."user" n on n.id=e.subject::uuid
@@ -47,6 +49,7 @@ async function canModerate(c, user, row) {
 export async function executePlatform(c, identity, action, data = {}) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) fail('invalid_input');
   switch (action) {
+    case 'account.delete': return deleteAccount(c,identity,data);
     case 'account.register': {
       if(!identity)fail('authentication_required',401);
       if(!identity.emailVerified||!identity.email||(identity.authProvider!=='neon'&&!['password','google'].includes(identity.provider)))fail('verified_email_required',403);
@@ -62,7 +65,9 @@ export async function executePlatform(c, identity, action, data = {}) {
       const username=text(data.username,2,30);if(!/^[A-Za-z0-9_.-]+$/.test(username))fail('invalid_username');
       if(data.acceptPolicies!==true)fail('policy_acceptance_required');
       const policy=(await c.query('select * from public.governance_config where singleton and terms_effective')).rows[0];
-      if(!policy||data.termsVersion!==policy.terms_version||data.privacyVersion!==policy.privacy_version||data.rulesVersion!==policy.rules_version)fail('policy_version_mismatch',409);
+      if(!policy||!policy.signup_enabled)fail('signup_disabled',403);
+      if(policy.scope==='staging'&&data.stagingConsent!==true)fail('staging_consent_required',403);
+      if(data.termsVersion!==policy.terms_version||data.privacyVersion!==policy.privacy_version||data.rulesVersion!==policy.rules_version)fail('policy_version_mismatch',409);
       await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['register:'+identity.uid]);
       if((await c.query('select 1 from public.identities where firebase_uid=$1',[identity.uid])).rowCount)fail('account_already_exists',409);
       if((await c.query('select 1 from private.reserved_usernames where username_key=lower($1)',[username])).rowCount)fail('reserved_username');
@@ -305,7 +310,7 @@ export async function executePlatform(c, identity, action, data = {}) {
     }
     case 'profile.get': {
       const r = await c.query(`select i.firebase_uid as uid,p.username,p.photo_url as "photoURL",p.bio,p.created_at as "createdAt"
-        from public.profiles p join public.identities i on i.id=p.user_id where i.firebase_uid=$1`, [id(data.uid)]);
+        from public.profiles p join public.identities i on i.id=p.user_id where i.firebase_uid=$1 and not exists(select 1 from public.user_accounts a where a.user_id=i.id and a.deleted_at is not null)`, [id(data.uid)]);
       return { profile:r.rows[0]??null };
     }
     case 'me': {

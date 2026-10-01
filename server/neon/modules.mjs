@@ -1,3 +1,4 @@
+import {linkVerifiedIdentity} from './auth-link.mjs';
 import {randomUUID} from 'node:crypto';
 import {ApiError} from './platform.mjs';
 import {verifyFirebaseToken} from './auth.mjs';
@@ -22,6 +23,15 @@ async function visibleChannel(c,u,value) {
 export async function executeModules(c,identity,action,data,ctx) {
  const {actor,live,canModerate,executePlatform}=ctx;
  switch(action) {
+ case 'policies.current': {
+  const config=await one(c,'select scope,signup_enabled as "signupEnabled",reports_enabled as "reportsEnabled",terms_effective as "termsEffective",terms_version as "termsVersion",privacy_version as "privacyVersion",rules_version as "rulesVersion" from public.governance_config where singleton');
+  return {config,policies:config?await rows(c,`select policy,version,scope,source_sha256 as "sourceSha256",document from public.policy_versions where (policy in ('terms','privacy') and version in($1,$2)) or (policy in ('community_guidelines','content_policy') and version=$3) order by policy`,[config.termsVersion,config.privacyVersion,config.rulesVersion]):[]};
+ }
+ case 'auth.logout': {
+  if(!identity||identity.authProvider!=='neon'||!identity.sessionToken)fail('authentication_required',401);
+  await c.query('select private.revoke_auth_session($1::uuid,$2)',[identity.subject,identity.sessionToken]);
+  return {signedOut:true};
+ }
  case 'viewer.count': {
   const u=identity?await actor(c,identity):null,l=await live(c,data.liveId,u);
   return await one(c,'select count(*)::int as count from private.live_viewer_sessions where live_id=$1 and expires_at>now()',[l.id]);
@@ -63,14 +73,7 @@ export async function executeModules(c,identity,action,data,ctx) {
   if(!await one(c,'select id from neon_auth."user" where id=$1 and coalesce(banned,false)=false',[identity.subject]))fail('account_disabled',403);
   // An independent, freshly authenticated Firebase session is mandatory. No email comparison.
   const proof=await verifyFirebaseToken(str(data.firebaseToken,16000,1));
-  if(!proof||!proof.emailVerified||!Number.isFinite(proof.authTime)||proof.authTime>Date.now()/1000+30||Date.now()/1000-proof.authTime>300)fail('fresh_dual_proof_required',403);
-  const existing=await actor(c,proof,true);
-  await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['link:'+identity.subject]);
-  await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['link-account:'+existing.id]);
-  const mappings=await rows(c,"select subject,user_id from private.external_auth_identities where provider='neon' and (subject=$1 or user_id=$2)",[identity.subject,existing.id]);
-  if(mappings.some(x=>x.subject!==identity.subject||x.user_id!==existing.id))fail('identity_conflict',409);
-  await c.query("insert into private.external_auth_identities(provider,subject,user_id) values('neon',$1,$2) on conflict do nothing",[identity.subject,existing.id]);
-  return {uid:existing.firebase_uid,linked:true};
+  return linkVerifiedIdentity(c,identity,proof,actor);
  }
  case 'progress.get': {
   const u=await actor(c,identity);
@@ -182,10 +185,10 @@ async function readDocument(c,identity,data,ctx) {
  const u=identity?await ctx.actor(c,identity).catch(e=>{if(e.code==='account_not_migrated')return null;throw e;}):null;
  const owned=value=>{if(!u||u.firebase_uid!==value)fail('forbidden',403);};
  let list=[];
- if(kind==='profiles')list=await rows(c,`select i.firebase_uid as id,i.firebase_uid as uid,p.username,p.photo_url as "photoURL",p.bio,p.created_at as "createdAt",p.username_updated_at as "usernameUpdatedAt" from public.profiles p join public.identities i on i.id=p.user_id where ($1::text is null or i.firebase_uid=$1) order by p.created_at desc,p.user_id limit 200`,[identifier??null]);
+ if(kind==='profiles')list=await rows(c,`select i.firebase_uid as id,i.firebase_uid as uid,p.username,p.photo_url as "photoURL",p.bio,p.created_at as "createdAt",p.username_updated_at as "usernameUpdatedAt" from public.profiles p join public.identities i on i.id=p.user_id where not exists(select 1 from public.user_accounts a where a.user_id=p.user_id and a.deleted_at is not null) and ($1::text is null or i.firebase_uid=$1) order by p.created_at desc,p.user_id limit 200`,[identifier??null]);
  else if(kind==='wallets'){if(!identifier){if(!u?.admin)fail('forbidden',403);list=await rows(c,'select i.firebase_uid as id,w.balance::text,w.total_sent::text as "totalSent",w.total_received::text as "totalReceived" from public.wallets w join public.identities i on i.id=w.user_id order by w.updated_at desc,w.user_id limit 200');}else{owned(identifier);const result=await ctx.executePlatform(c,identity,'wallet.get',{});list=result.wallet?[{id:identifier,uid:identifier,...result.wallet,totalSent:result.wallet.total_sent,totalReceived:result.wallet.total_received}]:[];}}
  else if(kind==='admins'){if(!u)fail('authentication_required',401);list=await rows(c,'select i.firebase_uid as id,active from public.admins a join public.identities i on i.id=a.user_id where ($1::text is null or i.firebase_uid=$1) and (i.id=$2 or $3) order by i.id limit 100',[identifier??null,u.id,u.admin]);}
- else if(kind==='governance')list=await rows(c,`select 'config' as id,reports_enabled as "reportsEnabled",rules_version as "rulesVersion",terms_version as "termsVersion",privacy_version as "privacyVersion",terms_effective as "termsEffective" from public.governance_config where singleton`);
+ else if(kind==='governance')list=await rows(c,`select 'config' as id,reports_enabled as "reportsEnabled",rules_version as "rulesVersion",terms_version as "termsVersion",privacy_version as "privacyVersion",terms_effective as "termsEffective",scope,signup_enabled as "signupEnabled" from public.governance_config where singleton`);
  else if(kind==='categories')list=(await ctx.executePlatform(c,identity,'categories.list',{})).categories.map(x=>({...x,id:x.id}));
  else if(kind==='users'){
   if(!sub){
@@ -204,7 +207,7 @@ async function readDocument(c,identity,data,ctx) {
  else if(kind==='channels') {
   if(sub){const channel=await visibleChannel(c,u,identifier);
    if(['followers','members'].includes(sub)){if(sub==='members'&&channel.owner_id!==u?.id&&child!==u?.firebase_uid)fail('forbidden',403);
-    list=await rows(c,sub==='followers'?`select i.firebase_uid as id,i.firebase_uid as uid,f.followed_at as "followedAt" from public.follows f join public.identities i on i.id=f.follower_id where f.channel_id=$1 order by f.followed_at desc,i.id limit 200`:`select i.firebase_uid as id,i.firebase_uid as uid,m.created_at as "createdAt" from public.channel_members m join public.identities i on i.id=m.user_id where m.channel_id=$1 and ($2 or i.id=$3) order by i.id limit 200`,[channel.id,...(sub==='members'?[channel.owner_id===u?.id,u?.id??null]:[])]);
+    list=await rows(c,sub==='followers'?`select i.firebase_uid as id,i.firebase_uid as uid,f.followed_at as "followedAt" from public.follows f join public.identities i on i.id=f.follower_id where f.channel_id=$1 order by f.followed_at desc,i.id limit 200`:`select i.firebase_uid as id,i.firebase_uid as uid,m.created_at as "createdAt",jsonb_build_object('username',p.username,'photoURL',p.photo_url) as profile from public.channel_members m join public.identities i on i.id=m.user_id left join public.profiles p on p.user_id=m.user_id where m.channel_id=$1 and ($2 or i.id=$3) order by i.id limit 200`,[channel.id,...(sub==='members'?[channel.owner_id===u?.id,u?.id??null]:[])]);
    }else if(sub==='schedule')list=await rows(c,`select coalesce(firebase_id,id::text) as id,title,description,starts_at as "startsAt",created_at as "createdAt",status from public.live_schedules where channel_id=$1 and status='scheduled' order by starts_at,id limit 100`,[channel.id]);
    else if(sub==='rewards')list=await rows(c,`select coalesce(firebase_id,id::text) as id,title,description,cost,active,stock from public.rewards where channel_id=$1 and (active or $2) order by created_at desc,id limit 100`,[channel.id,channel.owner_id===u?.id]);
    else fail('module_not_migrated',501);
@@ -214,12 +217,12 @@ async function readDocument(c,identity,data,ctx) {
  else if(kind==='streams'){
   if(!identifier){list=await rows(c,`select l.firebase_id as id,i.firebase_uid as "streamerUid",ch.firebase_id as "channelId",l.title,l.description,l.category_id as "categoryId",l.playback_url as "playbackURL",l.thumbnail_url as "thumbnailURL",l.status,l.mature_content as "matureContent",l.started_at as "startedAt",l.ended_at as "endedAt",l.created_at as "createdAt",l.total_views as "totalViews",(select count(*)::int from private.live_viewer_sessions v where v.live_id=l.id and v.expires_at>now()) as "viewerCount" from public.lives l join public.channels ch on ch.id=l.channel_id join public.identities i on i.id=l.owner_id where l.deleted_at is null and ch.deleted_at is null and ((l.visibility='public' and ch.visibility='public') or l.owner_id=$1) order by l.created_at desc,l.id limit 200`,[u?.id??null]);}
   else {const l=await ctx.live(c,identifier,u);
-   if(!sub){const result=await ctx.executePlatform(c,identity,'live.get',{liveId:identifier});list=[{...result.live,vodURL:l.vod_url,supportAlertSound:l.support_alert_sound,supportGoalLabel:l.support_goal_label,supportGoalCoins:l.support_goal_coins,supportAlertTheme:l.support_alert_theme,supportAlertMinCoins:l.support_alert_min_coins,supportAlertDurationMs:l.support_alert_duration_ms,totalViews:l.total_views,raidTargetStreamId:(await one(c,'select firebase_id from public.lives where id=$1',[l.raid_target_live_id]))?.firebase_id??'',hostTargetStreamId:(await one(c,'select firebase_id from public.lives where id=$1',[l.host_target_live_id]))?.firebase_id??''}];}
+   if(!sub){const result=await ctx.executePlatform(c,identity,'live.get',{liveId:identifier});list=[{...result.live,vodURL:l.vod_url,supportAlertSound:l.support_alert_sound,supportGoalLabel:l.support_goal_label,supportGoalCoins:l.support_goal_coins,supportAlertTheme:l.support_alert_theme,supportAlertMinCoins:l.support_alert_min_coins,supportAlertDurationMs:l.support_alert_duration_ms,totalViews:l.total_views,raidTargetStreamId:result.live.raidTargetStreamId??'',hostTargetStreamId:result.live.hostTargetStreamId??''}];}
    else if(sub==='chat'){list=(await ctx.executePlatform(c,identity,'chat.list',{liveId:identifier})).messages;}
    else if(sub==='chatSettings'||sub==='chatConfig'){list=await rows(c,`select 'main' as id,mode,slow_mode_seconds as "slowModeSeconds",allow_links as "allowLinks",block_excess_caps as "blockExcessCaps",blocked_words as "blockedWords",emergency_mode as "emergencyMode",coalesce(m.firebase_id,m.id::text) as "pinnedMessageId" from public.chat_settings s left join public.chat_messages m on m.id=s.pinned_message_id where s.live_id=$1`,[l.id]);}
    else if(sub==='chatBans'){if(!u)fail('authentication_required',401);if(child!==u.firebase_uid&&!await ctx.canModerate(c,u,l))fail('forbidden',403);list=await rows(c,`select i.firebase_uid as id,i.firebase_uid as uid,b.kind as reason,b.created_at as "createdAt",b.expires_at as "expiresAt" from public.live_bans b join public.identities i on i.id=b.user_id where b.live_id=$1 and b.revoked_at is null and (b.expires_at is null or b.expires_at>now()) and ($2::text is null or i.firebase_uid=$2) order by b.created_at desc,i.id limit 100`,[l.id,child??null]);}
-   else if(sub==='moderators'){if(!u)fail('authentication_required',401);const owner=l.owner_id===u.id||u.admin;list=await rows(c,`select i.firebase_uid as id,i.firebase_uid as uid from public.live_moderators m join public.identities i on i.id=m.user_id where m.live_id=$1 and ($2 or i.id=$3) order by i.id limit 100`,[l.id,owner,u.id]);}
-   else if(sub==='viewers'){if(child&&child!==u?.firebase_uid)fail('forbidden',403);list=await rows(c,`select i.firebase_uid as id,v.last_seen_at as "lastSeen" from private.live_viewer_sessions v join public.identities i on i.id=v.user_id where v.live_id=$1 and v.expires_at>now() and ($2::text is null or i.firebase_uid=$2) order by v.last_seen_at desc,i.id limit 200`,[l.id,child??null]);}
+   else if(sub==='moderators'){if(!u)fail('authentication_required',401);const owner=l.owner_id===u.id||u.admin;list=await rows(c,`select i.firebase_uid as id,i.firebase_uid as uid,jsonb_build_object('username',p.username,'photoURL',p.photo_url) as profile from public.live_moderators m join public.identities i on i.id=m.user_id left join public.profiles p on p.user_id=m.user_id where m.live_id=$1 and ($2 or i.id=$3) order by i.id limit 100`,[l.id,owner,u.id]);}
+   else if(sub==='viewers'){if(!child&&(!u||!await ctx.canModerate(c,u,l)))fail('forbidden',403);if(child&&child!==u?.firebase_uid)fail('forbidden',403);list=await rows(c,`select i.firebase_uid as id,v.last_seen_at as "lastSeen" from private.live_viewer_sessions v join public.identities i on i.id=v.user_id where v.live_id=$1 and v.expires_at>now() and ($2::text is null or i.firebase_uid=$2) order by v.last_seen_at desc,i.id limit 200`,[l.id,child??null]);}
    else if(sub==='reactions')list=await rows(c,`select r.id::text as id,r.emoji,r.created_at as "createdAt",i.firebase_uid as uid from public.live_reactions r join public.identities i on i.id=r.user_id where r.live_id=$1 and r.expires_at>now() order by r.created_at desc,r.id limit 30`,[l.id]);
    else if(sub==='supportAlerts')list=await rows(c,`select t.transaction_id::text as id,t.transaction_id::text as "transactionId",i.firebase_uid as "fromUid",t.amount::text,t.message,t.created_at as "createdAt" from public.support_alerts t join public.identities i on i.id=t.from_user_id where t.live_id=$1 and t.expires_at>now() order by t.created_at desc,t.transaction_id limit 100`,[l.id]);
    else if(sub==='polls'){const polls=await rows(c,'select coalesce(firebase_id,id::text) as id,id as internal,kind,question,status,created_at as "createdAt",result_option_id from public.polls where live_id=$1 order by created_at desc,id limit 10',[l.id]);const options=await rows(c,'select poll_id,id,position,label,vote_count from public.poll_options where poll_id=any($1::uuid[]) order by poll_id,position',[polls.map(x=>x.internal)]);list=polls.map(p=>{const out={...p};delete out.internal;delete out.result_option_id;out.resultIndex=null;for(const option of options.filter(o=>o.poll_id===p.internal)){out['option'+option.position]=option.label;out['count'+option.position]=option.vote_count;if(option.id===p.result_option_id)out.resultIndex=option.position;}return out;});}

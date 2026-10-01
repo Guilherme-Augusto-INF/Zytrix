@@ -15,6 +15,7 @@ let channel = null;
 let stream = null;
 let walletUnsubscribe = null;
 let creatingChannel = false;
+let closingAccount = false;
 function dateText(timestamp) {
     try {
         return timestamp?.toDate?.().toLocaleDateString('pt-BR', {
@@ -517,7 +518,13 @@ async function collectAccountRefs(uid) {
     return refs;
 }
 async function deleteAccount() {
-    if(await platformSource.staging()){document.querySelector('#delete-account-msg').textContent='Exclusão de conta ainda indisponível no staging. Seu perfil e registros financeiros foram preservados.';return;}
+    if(await platformSource.staging()){
+      const message=document.querySelector('#delete-account-msg');
+      if(window.prompt('Seu perfil e conteúdo serão removidos. Registros financeiros e de segurança serão preservados. Digite EXCLUIR:')!=='EXCLUIR')return;
+      try{closingAccount=true;await ownPlatform(user.uid,'account.delete',{confirmation:'EXCLUIR',requestKey:crypto.randomUUID()});
+        walletUnsubscribe?.();await (await import('./neon-browser.js')).signOut().catch(()=>{});localStorage.removeItem('zytrixSelectedStream');location.href='index.html';
+      }catch(error){closingAccount=false;message.textContent=error.code==='recent_login_required'?'Entre novamente e repita a exclusão nos próximos cinco minutos.':'Não foi possível excluir a conta.';}return;
+    }
     const message = document.querySelector('#delete-account-msg');
     const button = document.querySelector('#delete-account');
     const confirmation = window.prompt('Esta ação é permanente. Digite EXCLUIR para confirmar:');
@@ -551,6 +558,7 @@ async function deleteAccount() {
 }
 onAuthStateChanged(auth, async (currentUser) => {
     if (!currentUser) {
+        if(closingAccount)return;
         location.href = 'login.html';
         return;
     }
