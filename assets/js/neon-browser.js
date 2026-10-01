@@ -12,7 +12,8 @@ const platform=createPlatformClient(()=>auth.currentUser);
 async function config(){return configPromise??=fetch('/api/v1/config',{cache:'no-store'}).then(async r=>{const c=await r.json();if(!r.ok||!c.postgresStaging||c.authentication!=='neon'||!c.neonAuthUrl)throw Error('neon_auth_not_configured');return c;});}
 export async function authRequest(path,body) {
  const c=await config();const response=await fetch(c.neonAuthUrl+'/'+path,{method:body?'POST':'GET',credentials:'include',cache:'no-store',headers:body?{'Content-Type':'application/json'}:{},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(15000)});
- const value=await response.json();if(!response.ok)throw Object.assign(Error('authentication_failed'),{code:value.code??'authentication_failed',status:response.status});return value;
+ let value;try{value=await response.json();}catch{throw Object.assign(Error('authentication_unavailable'),{code:'authentication_unavailable',status:response.status});}
+ if(!response.ok)throw Object.assign(Error('authentication_failed'),{code:value?.code??'authentication_failed',status:response.status,retryAfter:Math.min(3600,Math.max(60,Number(response.headers?.get?.('retry-after'))||60))});return value;
 }
 function notify(){for(const cb of listeners)cb(auth.currentUser);}
 async function sessionJwt(subject,sessionToken,emailVerified,force=false){
@@ -53,8 +54,13 @@ export async function refreshSession(){
 export function onAuthStateChanged(_auth,callback){listeners.add(callback);if(loaded)queueMicrotask(()=>{if(listeners.has(callback))callback(auth.currentUser);});else void refreshSession().catch(()=>{});return()=>listeners.delete(callback);}
 async function replaceSession(path,data){generation++;await authRequest(path,data);generation++;await refreshPromise?.catch(()=>{});localStorage.removeItem('zytrixNeonSignedOut');await refreshSession();changes?.postMessage('changed');return {user:auth.currentUser};}
 export async function signInWithEmailAndPassword(_auth,email,password){return replaceSession('sign-in/email',{email,password});}
-export async function createUserWithEmailAndPassword(_auth,email,password){return replaceSession('sign-up/email',{email,password,name:email.split('@')[0]});}
-export async function signInWithPopup(){const result=await authRequest('sign-in/social',{provider:'google',callbackURL:new URL('login.html',location.href).href});if(result.url){localStorage.removeItem('zytrixNeonSignedOut');location.assign(result.url);}throw Error('oauth_redirect');}
+export async function createUserWithEmailAndPassword(_auth,email,password){
+ generation++;auth.currentUser=null;jwtCache=null;notify();
+ const result=await authRequest('sign-up/email',{email,password,name:email.split('@')[0]});
+ if(result?.user&&!result.user.emailVerified)return {user:{email:result.user.email,emailVerified:false,enrollmentRequired:true,pendingVerification:true}};
+ generation++;await refreshPromise?.catch(()=>{});localStorage.removeItem('zytrixNeonSignedOut');await refreshSession();changes?.postMessage('changed');return {user:auth.currentUser};
+}
+export async function signInWithPopup(){const result=await authRequest('sign-in/social',{provider:'google',callbackURL:new URL('login.html',location.href).href,errorCallbackURL:new URL('login.html',location.href).href});if(result.url){localStorage.removeItem('zytrixNeonSignedOut');location.assign(result.url);}throw Error('oauth_redirect');}
 export async function signOut(){
  try{if(auth.currentUser)await platform('auth.logout');}
  catch(error){if(!['authentication_required','account_disabled'].includes(error.code))throw error;}

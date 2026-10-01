@@ -14,7 +14,7 @@ async function authAdapter(fetchImpl,platformImpl=async()=>({uid:'preserved',enr
  const context=vm.createContext({console,AbortSignal,URL,atob,queueMicrotask,fetch:fetchImpl,
   localStorage:{getItem:()=>null,removeItem(){},setItem(){}},BroadcastChannel:undefined,
   createPlatformClient:()=>platformImpl,watchRealtime:()=>()=>{}});
- vm.runInContext(source+'\nglobalThis.adapter={auth,refreshSession,signInWithEmailAndPassword,signOut};',context);
+ vm.runInContext(source+'\nglobalThis.adapter={auth,refreshSession,signInWithEmailAndPassword,createUserWithEmailAndPassword,authRequest,signOut};',context);
  return context.adapter;
 }
 const response=value=>({ok:true,json:async()=>value});
@@ -96,4 +96,36 @@ test('logout of a deleted or expired session clears the account without a false 
 test('logout does not hide an actual revocation service outage',async()=>{
  const a=await authAdapter(async url=>url==='/api/v1/config'?authConfig:response({}),async()=>{throw Object.assign(Error('unavailable'),{code:'service_unavailable'});});
  a.auth.currentUser={uid:'old'};await assert.rejects(a.signOut(),/unavailable/);assert.equal(a.auth.currentUser,null);
+});
+
+
+test('verification-required signup returns a pending account without inventing a session or enrolling',async()=>{
+ let sessionReads=0,enrollments=0;
+ const a=await authAdapter(async url=>{if(url==='/api/v1/config')return authConfig;if(url.endsWith('/sign-up/email'))return response({user:{id:'new',email:'fixture@example.invalid',emailVerified:false},token:null});sessionReads++;return response(null);},async()=>{enrollments++;});
+ const result=await a.createUserWithEmailAndPassword(a.auth,'fixture@example.invalid','fixture-only');
+ assert.equal(result.user.pendingVerification,true);assert.equal(result.user.email,'fixture@example.invalid');assert.equal(a.auth.currentUser,null);assert.equal(sessionReads,0);assert.equal(enrollments,0);assert.equal(result.user.getIdToken,undefined);
+});
+
+test('provider failures preserve a safe code and Retry-After but never expose internal messages',async()=>{
+ const a=await authAdapter(async url=>url==='/api/v1/config'?authConfig:{ok:false,status:429,headers:{get:()=> '120'},json:async()=>({code:'RATE_LIMIT',message:'private diagnostic'})});
+ await assert.rejects(a.authRequest('email-otp/send-verification-otp',{}),e=>e.status===429&&e.retryAfter===120&&!e.message.includes('private'));
+});
+
+test('OTP request throttles concurrent clicks, failures and provider Retry-After',async()=>{
+ const {verificationSender}=await import('../assets/js/neon-auth-errors.js');let now=0,calls=0,release;
+ const sender=verificationSender(()=>{calls++;return calls===1?new Promise(resolve=>release=resolve):Promise.resolve();},()=>now);
+ const pending=sender.request({email:'fixture@example.invalid'});await assert.rejects(sender.request({}),e=>e.status===429);assert.equal(calls,1);release();await pending;
+ assert.equal(sender.remaining(),60);now=60000;await sender.request({});;assert.equal(calls,2)
+});
+
+
+test('provider rate limit extends resend wait and public messages distinguish auth stages',async()=>{
+ const {verificationSender,neonAuthMessage}=await import('../assets/js/neon-auth-errors.js');let now=0;
+ const sender=verificationSender(async()=>{throw Object.assign(Error('internal'),{status:429,retryAfter:120});},()=>now);
+ await assert.rejects(sender.request({}));assert.equal(sender.remaining(),120);now=119000;await assert.rejects(sender.request({}),e=>e.status===429);
+ assert.match(neonAuthMessage({code:'EMAIL_NOT_VERIFIED'}),/Verifique/);
+ assert.match(neonAuthMessage({},'send'),/solicitar o código/);
+ assert.match(neonAuthMessage({code:'OTP_EXPIRED'},'verify'),/inválido ou expirado/);
+ assert.match(neonAuthMessage({},'reset'),/recuperação/);
+ assert.doesNotMatch(neonAuthMessage({message:'secret diagnostic'},'register'),/secret/);
 });
