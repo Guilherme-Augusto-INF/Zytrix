@@ -7,6 +7,18 @@ export const IMAGE_LIMITS = Object.freeze({
 
 const ALLOWED_TYPES = new Set(IMAGE_ACCEPT.split(','));
 
+const IMAGE_ERROR_CODES = new Set([
+  'invalid-kind', 'missing-file', 'invalid-type', 'empty-file', 'file-too-large',
+  'invalid-owner', 'invalid-stream', 'invalid-image', 'image-canvas-unavailable',
+  'image-encode-failed', 'webp-unsupported', 'optimized-file-too-large',
+  'upload-timeout', 'image-processing-timeout', 'download-url-timeout'
+]);
+
+export function isImageUploadError(error) {
+  const code = String(error?.code || error?.message || '');
+  return code.startsWith('storage/') || IMAGE_ERROR_CODES.has(code);
+}
+
 export function validateImageCandidate(file, kind = 'profile') {
   const limits = IMAGE_LIMITS[kind];
   if (!limits) return { ok: false, code: 'invalid-kind' };

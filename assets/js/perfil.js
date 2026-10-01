@@ -2,7 +2,7 @@ import { auth, db, googleProvider, onAuthStateChanged, EmailAuthProvider, reauth
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
 import { safeImageUrl } from './security.js';
-import { IMAGE_ACCEPT, uploadPublicImage, imageUploadMessage } from './media-upload.js';
+import { IMAGE_ACCEPT, uploadPublicImage, imageUploadMessage, isImageUploadError } from './media-upload.js';
 header();
 footer();
 const root = document.querySelector('#profile-root');
@@ -355,7 +355,7 @@ async function saveProfile() {
         if (success) success.innerHTML = '<div class="message ok">Foto e dados de perfil salvos com sucesso.</div>';
     } catch (error) {
         console.error('Falha ao atualizar perfil:', error);
-        message.textContent = String(error?.code || '').startsWith('storage/') || ['file-too-large','invalid-type','invalid-image','optimized-file-too-large'].includes(error?.code)
+        message.textContent = isImageUploadError(error)
             ? imageUploadMessage(error)
             : error?.code === 'permission-denied'
                 ? 'Alteração recusada. Confira o domínio da imagem e, se estiver alterando o nome, respeite o intervalo de 7 dias.'

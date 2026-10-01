@@ -2,7 +2,7 @@ import { auth, db, onAuthStateChanged, doc, getDoc, getDocs, query, collection, 
 import { header, footer, categories, escapeAttr, escapeHtml } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
 import { safeImageUrl } from './security.js';
-import { IMAGE_ACCEPT, uploadPublicImage, imageUploadMessage } from './media-upload.js';
+import { IMAGE_ACCEPT, uploadPublicImage, imageUploadMessage, isImageUploadError } from './media-upload.js';
 import { SUPPORT_ALERT_SOUNDS, normalizeSupportAlertSound, playSupportAlertSound, unlockSupportAlertAudio } from './support-alert-sound.js';
 header();
 footer();
@@ -313,7 +313,7 @@ async function save() {
     }
     catch (error) {
         console.error(error);
-        message.innerHTML = String(error?.code || '').startsWith('storage/') || ['file-too-large','invalid-type','invalid-image','optimized-file-too-large'].includes(error?.code)
+        message.innerHTML = isImageUploadError(error)
             ? `<div class="message err">${escapeHtml(imageUploadMessage(error))}</div>`
             : error?.code === 'permission-denied'
                 ? '<div class="message err">O banco recusou as configurações. Verifique o domínio da thumbnail e as permissões de streamer.</div>'
@@ -365,7 +365,7 @@ async function toggle() {
     }
     catch (error) {
         console.error(error);
-        message.innerHTML = String(error?.code || '').startsWith('storage/') || ['file-too-large','invalid-type','invalid-image','optimized-file-too-large'].includes(error?.code)
+        message.innerHTML = isImageUploadError(error)
             ? `<div class="message err">${escapeHtml(imageUploadMessage(error))}</div>`
             : error?.code === 'permission-denied'
                 ? '<div class="message err">O banco recusou a atualização. Verifique a thumbnail, o e-mail verificado e suas permissões.</div>'

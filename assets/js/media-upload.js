@@ -1,60 +1,9 @@
 import { storage, storageRef, uploadBytesResumable, getDownloadURL } from './firebase.js';
-import { IMAGE_LIMITS, mediaStoragePath, validateImageCandidate } from './media-upload-policy.js';
+import { mediaStoragePath } from './media-upload-policy.js';
+import { optimizeImage } from './image-processing.js';
+export { optimizeImage } from './image-processing.js';
+export { isImageUploadError } from './media-upload-policy.js';
 export { IMAGE_ACCEPT, IMAGE_LIMITS, mediaStoragePath, validateImageCandidate } from './media-upload-policy.js';
-
-function imageElementFromFile(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
-    image.onerror = () => { URL.revokeObjectURL(url); reject(new Error('invalid-image')); };
-    image.src = url;
-  });
-}
-
-async function decodeImage(file) {
-  if (typeof createImageBitmap === 'function') return createImageBitmap(file);
-  return imageElementFromFile(file);
-}
-
-function canvasBlob(canvas, type, quality) {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('image-encode-failed')), type, quality);
-  });
-}
-
-export async function optimizeImage(file, kind = 'profile') {
-  const validation = validateImageCandidate(file, kind);
-  if (!validation.ok) {
-    const error = new Error(validation.code);
-    error.code = validation.code;
-    throw error;
-  }
-  const { limits } = validation;
-  const decoded = await decodeImage(file);
-  const sourceWidth = Number(decoded.width || decoded.naturalWidth || 0);
-  const sourceHeight = Number(decoded.height || decoded.naturalHeight || 0);
-  if (!sourceWidth || !sourceHeight) throw new Error('invalid-image');
-
-  const scale = Math.min(1, limits.width / sourceWidth, limits.height / sourceHeight);
-  const width = Math.max(1, Math.round(sourceWidth * scale));
-  const height = Math.max(1, Math.round(sourceHeight * scale));
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d', { alpha: false });
-  if (!context) throw new Error('image-canvas-unavailable');
-  context.drawImage(decoded, 0, 0, width, height);
-  decoded.close?.();
-
-  const blob = await canvasBlob(canvas, 'image/webp', limits.quality);
-  if (blob.size > limits.outputBytes) {
-    const error = new Error('optimized-file-too-large');
-    error.code = 'optimized-file-too-large';
-    throw error;
-  }
-  return blob;
-}
 
 function uploadWithTimeout(reference, blob, metadata, timeoutMs = 20000) {
   return new Promise((resolve, reject) => {
@@ -118,6 +67,9 @@ export function imageUploadMessage(error) {
   if (code.includes('file-too-large')) return 'A imagem selecionada é grande demais.';
   if (code.includes('invalid-type')) return 'Use uma imagem JPG, PNG ou WebP.';
   if (code.includes('invalid-image')) return 'O arquivo não parece ser uma imagem válida.';
+  if (code.includes('empty-file') || code.includes('missing-file')) return 'Selecione um arquivo de imagem válido.';
+  if (code.includes('webp-unsupported')) return 'Seu navegador não conseguiu converter a imagem. Atualize o navegador ou use a opção de URL.';
+  if (code.includes('image-canvas-unavailable') || code.includes('image-encode-failed')) return 'Não foi possível converter a imagem. Tente outro arquivo ou navegador.';
   if (code.includes('storage/unauthorized')) return 'Você não tem permissão para enviar esta imagem.';
   if (code.includes('storage/canceled')) return 'Envio cancelado.';
   if (code.includes('upload-timeout')) return 'O Firebase Storage não respondeu ao envio em 20 segundos. Verifique se o Storage está ativado e se as regras foram publicadas.';
