@@ -6,6 +6,12 @@ test('fragmented UTF-8 snapshots survive stream boundaries and heartbeat comment
  const values=[];await consumeEvents(stream,x=>values.push(x),new AbortController().signal);
  assert.equal(values[0].messages[0].text,'Olá 🔥');assert.deepEqual(values[1],{messages:[]});
 });
+test('abort cancels a pending reader so a closed tab cannot retain an orphan stream',async()=>{
+ const controller=new AbortController();let cancelled=false;
+ const stream=new ReadableStream({cancel(){cancelled=true;}});
+ const reading=consumeEvents(stream,()=>assert.fail('No snapshot'),controller.signal);
+ controller.abort();await reading;assert.equal(cancelled,true);
+});
 test('cancelled reader does not deliver private snapshots; oversized events rejected',async()=>{
  const controller=new AbortController();controller.abort();let delivered=false;
  await consumeEvents(new ReadableStream({start(c){c.close();}}),()=>delivered=true,controller.signal);assert.equal(delivered,false);
