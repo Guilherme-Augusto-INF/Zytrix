@@ -16,6 +16,7 @@ const root = document.querySelector('#admin-root');
 let user = null;
 let promotions = [];
 let observer = null;
+let authorized = false;
 
 async function isAdmin(uid) {
   const snap = await getDoc(doc(db, 'admins', uid)).catch(() => null);
@@ -34,7 +35,7 @@ function localDate(value) {
 }
 
 function mount() {
-  if (!root || !user) return;
+  if (!root || !user || !authorized) return;
   root.querySelector('#admin-promotions')?.remove();
   const section = document.createElement('section');
   section.id = 'admin-promotions';
@@ -117,7 +118,7 @@ async function togglePromotion(id) {
 }
 
 function tryMount() {
-  if (!root || !user) return;
+  if (!root || !user || !authorized) return;
   if (root.querySelector('#admin-promotions')) return;
   if (root.querySelector('.state')) return;
   mount();
@@ -125,7 +126,10 @@ function tryMount() {
 
 onAuthStateChanged(auth, async current => {
   user = current;
+  authorized=false;root?.querySelector('#admin-promotions')?.remove();
   if (!user || !(await isAdmin(user.uid))) return;
+  if(auth.currentUser?.uid!==user.uid)return;
+  authorized=true;
   await loadPromotions();
 });
 

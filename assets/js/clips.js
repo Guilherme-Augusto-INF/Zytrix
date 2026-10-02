@@ -44,7 +44,7 @@ async function render() {
     root.innerHTML = '<div class="state">Nenhum clipe disponível com os seus filtros.</div>';
     return;
   }
-  const hydrated = await Promise.all(visible.map(async item => ({ ...item, streamer: await profileFor(item.streamerUid), creator: await profileFor(item.creatorUid) })));
+  const hydrated = await Promise.all(visible.map(async item => ({ ...item, streamer: item.streamerName?{username:item.streamerName}:await profileFor(item.streamerUid), creator: item.creatorName?{username:item.creatorName}:await profileFor(item.creatorUid) })));
   root.innerHTML = hydrated.map(item => `
     <article class="vertical-clip" id="clip-${escapeAttr(item.id)}">
       <div class="vertical-clip-media">

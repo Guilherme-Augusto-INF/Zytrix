@@ -1,10 +1,11 @@
+import {platformSource,ownPlatform} from './platform-backend.js';
 import {auth,db,doc,collection,getDoc,runTransaction,serverTimestamp} from './firebase.js';
 import {validateReport,reportKey,targetPath,RESOLUTIONS} from './report-model.js';
 export async function reportAvailability() {
   const s=await getDoc(doc(db,'governance','config'));
   return s.exists() && s.data().reportsEnabled===true && s.data().rulesVersion==='governance-1';
 }
-export async function submitReport(input) {
+async function firebase_submitReport(input) {
   const user=auth.currentUser;
   if(!user) throw new Error('Entre na sua conta para denunciar.');
   await user.reload();
@@ -32,7 +33,7 @@ export async function submitReport(input) {
   });
   return reportRef.id;
 }
-export async function closeReport(id,resolution) {
+async function firebase_closeReport(id,resolution) {
   if(!Object.hasOwn(RESOLUTIONS,resolution)) throw new Error('Resultado inválido.');
   const user=auth.currentUser;
   if(!user) throw new Error('Sessão encerrada.');
@@ -43,4 +44,11 @@ export async function closeReport(id,resolution) {
     tx.update(ref,{status:'closed',resolution,reviewedAt:serverTimestamp()});
     tx.set(audit,{reportId:id,action:'close_report',resolution,moderatorUid:user.uid,createdAt:serverTimestamp()});
   });
+}
+
+export async function submitReport(input){
+ return platformSource.run(async()=>(await ownPlatform(auth.currentUser?.uid,'reports.submit',validateReport(input))).id,()=>firebase_submitReport(input));
+}
+export async function closeReport(id,resolution){
+ return platformSource.run(()=>ownPlatform(auth.currentUser?.uid,'reports.close',{id,resolution}),()=>firebase_closeReport(id,resolution));
 }

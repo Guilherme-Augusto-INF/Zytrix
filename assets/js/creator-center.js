@@ -78,6 +78,7 @@ async function resolveUserId(value) {
 
 async function hydrateNamed(items) {
   return Promise.all(items.map(async item => {
+    if(item.profile?.username)return item;
     const snap = await getDoc(doc(db, 'profiles', item.uid)).catch(() => null);
     return { ...item, profile: snap?.exists?.() ? snap.data() : { username: item.uid } };
   }));

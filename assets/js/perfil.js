@@ -1,3 +1,5 @@
+import {platformSource,ownPlatform} from './platform-backend.js';
+import {recoveryPayload} from './staging-recovery.js';
 import { auth, db, googleProvider, onAuthStateChanged, EmailAuthProvider, reauthenticateWithPopup, reauthenticateWithCredential, deleteUser, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot, updateDoc, query, collection, collectionGroup, where, limit, serverTimestamp, writeBatch } from './firebase.js';
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
@@ -13,6 +15,7 @@ let channel = null;
 let stream = null;
 let walletUnsubscribe = null;
 let creatingChannel = false;
+let closingAccount = false;
 function dateText(timestamp) {
     try {
         return timestamp?.toDate?.().toLocaleDateString('pt-BR', {
@@ -43,6 +46,10 @@ async function load() {
         getDoc(doc(db, 'wallets', user.uid)),
         getDoc(doc(db, 'channels', user.uid))
     ]);
+    if(!profileSnap.exists()&&await platformSource.staging()){
+      root.innerHTML='<section class="card panel"><h1>Recuperar perfil</h1><p>Escolha um nome público. Seu ID e sua carteira serão preservados.</p><form id="recover-original-profile"><input name="username" class="input" minlength="2" maxlength="30" required><label><input name="confirm" type="checkbox" required> Confirmo a criação do meu perfil.</label><button class="btn btn-primary">Criar perfil</button><p role="status"></p></form></section>';
+      const form=root.querySelector('form');form.onsubmit=async event=>{event.preventDefault();try{const fields=new FormData(form);await ownPlatform(user.uid,'profile.recover',recoveryPayload(fields.get('username'),'',fields.get('confirm')==='on'));await load();}catch{form.querySelector('[role=status]').textContent='Não foi possível recuperar o perfil. Verifique seu e-mail e o nome escolhido.';}};return;
+    }
     // Older accounts may have lost a profile document during prior migrations.
     // Keep channel setup available instead of trapping them on a blank profile.
     profile = profileSnap.exists() ? profileSnap.data() : {
@@ -511,6 +518,13 @@ async function collectAccountRefs(uid) {
     return refs;
 }
 async function deleteAccount() {
+    if(await platformSource.staging()){
+      const message=document.querySelector('#delete-account-msg');
+      if(window.prompt('Seu perfil e conteúdo serão removidos. Registros financeiros e de segurança serão preservados. Digite EXCLUIR:')!=='EXCLUIR')return;
+      try{closingAccount=true;await ownPlatform(user.uid,'account.delete',{confirmation:'EXCLUIR',requestKey:crypto.randomUUID()});
+        walletUnsubscribe?.();await (await import('./neon-browser.js')).signOut().catch(()=>{});localStorage.removeItem('zytrixSelectedStream');location.href='index.html';
+      }catch(error){closingAccount=false;message.textContent=error.code==='recent_login_required'?'Entre novamente e repita a exclusão nos próximos cinco minutos.':'Não foi possível excluir a conta.';}return;
+    }
     const message = document.querySelector('#delete-account-msg');
     const button = document.querySelector('#delete-account');
     const confirmation = window.prompt('Esta ação é permanente. Digite EXCLUIR para confirmar:');
@@ -544,6 +558,7 @@ async function deleteAccount() {
 }
 onAuthStateChanged(auth, async (currentUser) => {
     if (!currentUser) {
+        if(closingAccount)return;
         location.href = 'login.html';
         return;
     }

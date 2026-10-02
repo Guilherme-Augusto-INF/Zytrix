@@ -59,7 +59,7 @@ async function evaluateAccess() {
 function startMessages() {
   stopMessages?.();
   stopMessages = onSnapshot(query(collection(db, 'streams', streamId, 'chat'), orderBy('createdAt', 'desc'), limit(25)), async snap => {
-    messages = await Promise.all(snap.docs.map(async item => ({ id: item.id, ...item.data(), profile: await profileFor(item.data().uid) })));
+    messages = await Promise.all(snap.docs.map(async item => ({ id: item.id, ...item.data(), profile: item.data().username!==undefined?{username:item.data().username||'Usuário'}:await profileFor(item.data().uid) })));
     render();
   }, () => {});
 }

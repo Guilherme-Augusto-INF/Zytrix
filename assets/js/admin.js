@@ -1,3 +1,4 @@
+import {platformSource,ownPlatform} from './platform-backend.js';
 import {
   auth,
   db,
@@ -61,6 +62,7 @@ async function safeCollection(path) {
 }
 
 async function moderationSnapshot(streams) {
+  if(await platformSource.staging())return ownPlatform(currentAdmin.uid,'admin.chat-summary');
   let messages = 0;
   const chatPenalties = [];
   const results = await Promise.all(streams.map(async stream => {
@@ -106,6 +108,11 @@ async function applyPenalty(event) {
     return;
   }
   try {
+    if(await platformSource.staging()) {
+      const date=durationToDate(duration);const minutes=date?Math.max(1,Math.ceil((date.getTime()-Date.now())/60000)):null;
+      await ownPlatform(currentAdmin.uid,'admin.penalty',{uid,kind:type,reason:reason.slice(0,500),minutes,requestKey:crypto.randomUUID()});
+      message.textContent='Penalidade aplicada.';await loadDashboard();return;
+    }
     const ref = doc(db, 'moderationPenalties', uid);
     const current = await getDoc(ref);
     const base = {
@@ -146,6 +153,10 @@ async function revokePenalty(uid) {
   const reason = window.prompt('Motivo para encerrar a penalidade:', 'Revisão administrativa');
   if (!reason) return;
   try {
+    if(await platformSource.staging()) {
+      await ownPlatform(currentAdmin.uid,'admin.penalty',{uid,kind:'revoke',reason:reason.slice(0,500),requestKey:crypto.randomUUID()});
+      await loadDashboard();return;
+    }
     await updateDoc(doc(db, 'moderationPenalties', uid), {
       active: false,
       updatedAt: serverTimestamp()

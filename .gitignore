@@ -3,3 +3,26 @@ node_modules/
 .vercel/
 *-debug.log
 .env*
+
+# Migração: jamais versionar exportações de dados pessoais
+migration-data/
+private_exports/
+*-service-account.json
+firebase-key.json*
+auth.json
+auth-map.json
+firestore.jsonl
+normalized/
+Zytrix-Export-Privado/
+*.connection
+
+# Never commit Firebase service credentials and private migration exports
+firebase-key.json
+**/firebase-key.json
+**/auth-map.json
+**/auth.json
+**/firestore.jsonl
+**/normalized/
+**/auth-check.json
+**/firestore-check.json
+**/serviceAccountKey.json

@@ -67,6 +67,7 @@ async function markSupportNotificationsSeen(uid) {
 }
 
 async function hydrateSupportProfiles(transactions) {
+  for(const item of transactions)if(item.fromUid&&item.fromProfile)supportProfiles.set(item.fromUid,item.fromProfile);
   const uids = [...new Set(
     transactions
       .map(transaction => String(transaction.fromUid || ''))

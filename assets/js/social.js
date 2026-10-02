@@ -1,3 +1,4 @@
+import {platformSource,ownPlatform,publicPlatform} from './platform-backend.js';
 import {
   db,
   collection,
@@ -26,7 +27,7 @@ export async function isFollowing(uid, channelId) {
   return snap.exists();
 }
 
-export async function setFollowState(uid, channelId, follow) {
+async function firebase_setFollowState(uid, channelId, follow) {
   if (!uid || !channelId || uid === channelId) return;
 
   const followingRef = doc(db, 'users', uid, 'following', channelId);
@@ -70,7 +71,7 @@ export function watchFollowing(uid, callback, onError = console.error) {
   );
 }
 
-export function watchFollowerCount(channelId, callback, onError = console.error) {
+function firebase_watchFollowerCount(channelId, callback, onError = console.error) {
   return onSnapshot(
     query(collection(db, 'channels', channelId, 'followers'), limit(1001)),
     snap => callback(snap.size),
@@ -86,7 +87,7 @@ function activePresenceCount(docs) {
   }).length;
 }
 
-export function watchActiveViewers(streamId, callback, onError = console.error) {
+function firebase_watchActiveViewers(streamId, callback, onError = console.error) {
   let cached = [];
 
   const recalculate = () => callback(activePresenceCount(cached));
@@ -139,4 +140,16 @@ export async function startViewerPresence(uid, streamId) {
     clearInterval(timer);
     deleteDoc(presenceRef).catch(() => {});
   };
+}
+
+export async function setFollowState(uid,channelId,following){
+ return platformSource.run(()=>ownPlatform(uid,'follow.set',{channelId,following}),()=>firebase_setFollowState(uid,channelId,following));
+}
+export function watchActiveViewers(liveId,callback,onError){
+ return platformSource.watch({neon:async()=>(await publicPlatform('viewer.count',{liveId})).count,
+  firebase:(next,error)=>firebase_watchActiveViewers(liveId,next,error),onData:callback,onError,pollMs:15000});
+}
+export function watchFollowerCount(channelId,callback,onError){
+ return platformSource.watch({neon:async()=>(await publicPlatform('follow.count',{channelId})).count,
+  firebase:(next,error)=>firebase_watchFollowerCount(channelId,next,error),onData:callback,onError});
 }
