@@ -19,7 +19,8 @@ export function validateTarget(project,branch,auth){
  if(project?.project?.id!==PROJECT||branch?.branch?.id!==BRANCH||branch.branch.name!=='staging'||auth?.branch_id!==BRANCH||auth.base_url!==AUTH||auth.db_name!=='neondb')fail('staging_target_mismatch');
 }
 async function privateFile(path){
- const file=await realpath(path),root=await realpath(ROOT),r=relative(root,file);
+ let file;try{file=await realpath(path);}catch{fail('private_credentials_file_unavailable');}
+ const root=await realpath(ROOT),r=relative(root,file);
  if(!r||(!r.startsWith('..')&&!isAbsolute(r)))fail('credentials_must_be_outside_repository');
  if((await readFile(file)).length>65536)fail('credentials_file_too_large');
  return credentials(JSON.parse(await readFile(file,'utf8')));
