@@ -81,7 +81,7 @@ async function main(){
  if(pkg.name!=='neon'||pkg.version!=='7.0.2'||resolve(entry)!==resolve(packageRoot,'dist/cli.js'))fail('verified_neon_cli_7_0_2_required');
  const run=(a,b)=>cliRequest(entry,a,b);
  if(!process.env.NEON_API_KEY){const profiles=await run(['profile','list','--output','json']);if(!profiles.some(p=>p.active==='*'&&p.account&&p.account!=='-'))fail('neon_cli_login_required');}
- const request=(path,method='GET',body)=>run(['api',path,'--method',method,'--output','json',...(body?['--data','-']:[])],body);
+ const request=(path,method='GET',body)=>run(['api',path,'--method',method,'--output','json',...(body?['--data=-']:[])],body);
  const result=await configure({request,loadCredentials:()=>privateFile(file),apply:args.includes('--apply'),probe:probeOAuth});
  console.log(JSON.stringify(result));
 }

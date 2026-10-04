@@ -127,5 +127,7 @@ test('provider rate limit extends resend wait and public messages distinguish au
  assert.match(neonAuthMessage({},'send'),/solicitar o código/);
  assert.match(neonAuthMessage({code:'OTP_EXPIRED'},'verify'),/inválido ou expirado/);
  assert.match(neonAuthMessage({},'reset'),/recuperação/);
+ assert.match(neonAuthMessage({code:'account_not_linked'},'google'),/método usado no cadastro/);
+ assert.doesNotMatch(neonAuthMessage({code:'private-provider-diagnostic'},'google'),/private-provider-diagnostic/);
  assert.doesNotMatch(neonAuthMessage({message:'secret diagnostic'},'register'),/secret/);
 });

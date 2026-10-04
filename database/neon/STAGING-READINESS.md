@@ -96,3 +96,10 @@ AUTH CODE READY: corrected paths and automated tests PASS. AUTH STAGING READY: N
 
 
 Final code Preview 06a0176be7b7c786819969dd957ce74cd855a802 reached READY as dpl_CnsFx7qQMBpHAtQqxFdaaQos6sKF. Original login submitted safely immediately after navigation (no password query parameter), displayed pending verification, switched to the verified fixture and completed original logout. Its sampled 5xx log aggregate was empty. Both disposable fixtures were removed; 22 identities / 8 wallets / 1 real managed Auth user / 0 Neon links remain. Real user and financial records preserved. No configuration mutation, merge, promotion, production Firebase change or PR #16 edit occurred. Google and real email/recovery/link certification remain pending.
+
+
+## Google staging credential update — 2026-10-04
+
+The existing Google provider in soft-water-98807259 / br-wispy-scene-b6325si6 was updated via PATCH with the private Zytrix Staging client. Actual Google request verified the custom Client ID and branch-specific callback (see AUTH-TRANSITION.md). Original Preview login reached Google device confirmation and consent, then returned account_not_linked for the existing managed account. Shared-key redirect_uri_mismatch is resolved for this request; full Google login/logout certification remains pending authenticated provider linking. No linking by email, account deletion, production configuration, Firebase change or cutover occurred. Public error handling now distinguishes this callback error. Actual OTP delivery/reset, imported dual-proof linking and the other earlier staging gates remain uncertified. AUTH STAGING READY: NO.
+
+Validation after this change: npm test 78/78 PASS; npm run check PASS; npm run test:migration 13/13 PASS. Provider PATCH/read-back and original-screen Google redirect/consent were real. Successful managed Google session, original enrollment, Google logout and account switching were not validated because the provider returned account_not_linked. No secret, complete OAuth URL/state, OTP or token was stored in Git.

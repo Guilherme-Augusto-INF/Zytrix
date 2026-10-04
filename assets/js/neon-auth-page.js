@@ -58,6 +58,6 @@ export function initNeonAuthPage(form,show) {
  }finally{submitting=false;if(button)button.disabled=false;if(form.elements.password)form.elements.password.value='';}});
  if(mode==='reset'&&new URLSearchParams(location.search).has('token')){form.elements.email.required=false;form.elements.email.closest('.form-group')?.setAttribute('hidden','');const field=document.createElement('input');field.name='password';field.type='password';field.className='input';field.autocomplete='new-password';field.required=true;field.placeholder='Nova senha';form.prepend(field);}
  document.querySelector('#google-login')?.addEventListener('click',async e=>{const button=e.currentTarget;button.disabled=true;try{await signInWithPopup();}catch(error){if(error.message!=='oauth_redirect')show(neonAuthMessage(error,'google'));}finally{button.disabled=false;}});
- if(new URLSearchParams(location.search).has('error'))show('O login Google não foi concluído. Tente novamente; se o erro continuar, a configuração do staging precisa ser revisada.');
+ if(new URLSearchParams(location.search).has('error'))show(neonAuthMessage({code:new URLSearchParams(location.search).get('error')},'google'));
  onAuthStateChanged(auth,user=>{if(user&&mode!=='reset')void finish(user).catch(error=>show(neonAuthMessage(error)));});
 }

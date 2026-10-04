@@ -1,5 +1,6 @@
 // Public messages deliberately omit provider payloads, addresses and internal details.
 export function neonAuthMessage(error, step='login') {
+ if(step==='google'&&error?.code==='account_not_linked')return 'Esta conta ainda não está vinculada ao Google. Entre pelo método usado no cadastro. A vinculação precisa confirmar as duas identidades.';
  if(error?.status===429)return 'Muitas tentativas. Aguarde antes de tentar novamente.';
  if(error?.code==='EMAIL_NOT_VERIFIED')return 'Verifique seu e-mail antes de entrar. Você pode solicitar outro código abaixo.';
  if(['INVALID_OTP','OTP_EXPIRED','TOO_MANY_ATTEMPTS','INVALID_VERIFICATION_CODE'].includes(error?.code))return 'Código inválido ou expirado. Confira o código ou solicite outro.';
