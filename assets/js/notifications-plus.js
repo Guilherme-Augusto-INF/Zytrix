@@ -1,3 +1,4 @@
+import {platformSource,ownPlatform} from './platform-backend.js';
 import {
   auth,
   db,
@@ -53,7 +54,10 @@ async function load() {
 
   const followed = followingSnap?.docs?.map(item => item.id) || [];
   const now = Date.now();
-  for (const channelId of followed.slice(0,30)) {
+  if(await platformSource.staging()){
+    const result=await ownPlatform(user.uid,'schedules.list',{followingOnly:true});
+    data.schedules=result.schedules.map(s=>({...s,startsAt:{toDate:()=>new Date(s.startsAt)}}));
+  }else for (const channelId of followed.slice(0,30)) {
     const snap = await getDocs(query(collection(db, 'channels', channelId, 'schedule'), orderBy('startsAt', 'asc'), limit(5))).catch(() => null);
     for (const item of snap?.docs || []) {
       const schedule = { id: item.id, channelId, ...item.data() };

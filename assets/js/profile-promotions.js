@@ -1,3 +1,4 @@
+import {platformSource,ownPlatform} from './platform-backend.js';
 import {
   auth,
   db,
@@ -64,11 +65,12 @@ function feedback(text, error = false) {
 }
 
 async function claimPromotion(promotionId) {
-  alert('Resgates promocionais estão temporariamente pausados enquanto a emissão de Zy Coins migra para o backend seguro.');
+  if(!(await platformSource.staging())){alert('Resgates promocionais temporariamente pausados.');return;}
+  try{await ownPlatform(user.uid,'promotion.claim',{promotionId});await load();feedback('Promoção resgatada.');}catch(error){feedback('Não foi possível resgatar a promoção.',true);}
 }
 
 function tryMount() {
-  if (root?.querySelector('#profile-plus')) mount();
+  if (root?.querySelector('#profile-plus') && !root.querySelector('#profile-promotions')) mount();
 }
 
 onAuthStateChanged(auth, current => {
@@ -78,7 +80,7 @@ onAuthStateChanged(auth, current => {
 
 if (root) {
   observer = new MutationObserver(tryMount);
-  observer.observe(root, { childList: true, subtree: false });
+  observer.observe(root, { childList: true, subtree: true });
 }
 
 window.addEventListener('pagehide', () => observer?.disconnect());

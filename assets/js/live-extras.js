@@ -1,3 +1,4 @@
+import {platformSource,ownPlatform,financialAction} from './platform-backend.js';
 import {
   auth,
   db,
@@ -398,6 +399,10 @@ async function sendSupport() {
   const button = document.querySelector('#zy-extra-support-btn');
   if (button) button.disabled = true;
   try {
+    if(await platformSource.staging()) {
+      await financialAction(currentUser.uid,'support.send',{liveId:stream.id,amount,message});
+      feedback.textContent='Apoio enviado.';return;
+    }
     await ensureWallet(currentUser.uid);
     const senderRef = doc(db, 'wallets', currentUser.uid);
     const recipientRef = doc(db, 'wallets', stream.streamerUid);
@@ -478,6 +483,7 @@ async function sendReaction(emoji) {
     return;
   }
   if (!currentUser.emailVerified) return;
+  if(await platformSource.staging()) {try{await ownPlatform(currentUser.uid,'reaction.send',{liveId:streamId,emoji});}catch(error){console.warn('Reação indisponível.',error.code);}return;}
   const eventRef = doc(collection(db, 'streams', streamId, 'reactions'));
   const rateRef = doc(db, 'streams', streamId, 'reactionRate', currentUser.uid);
   try {
@@ -521,14 +527,14 @@ async function votePoll(index) {
   const pollRef = doc(db, 'streams', streamId, 'polls', activePoll.id);
   const voteRef = doc(db, 'streams', streamId, 'polls', activePoll.id, 'votes', currentUser.uid);
   try {
-    await runTransaction(db, async tx => {
+    await platformSource.run(()=>ownPlatform(currentUser.uid,'poll.vote',{liveId:streamId,pollId:activePoll.id,optionIndex:index}),()=>runTransaction(db, async tx => {
       const [pollSnap, voteSnap] = await Promise.all([tx.get(pollRef), tx.get(voteRef)]);
       if (!pollSnap.exists() || pollSnap.data().status !== 'active') throw new Error('poll-closed');
       if (voteSnap.exists()) throw new Error('already-voted');
       const poll = pollSnap.data();
       tx.update(pollRef, { [`count${index}`]: Number(poll[`count${index}`] || 0) + 1, updatedAt: serverTimestamp() });
       tx.set(voteRef, { uid: currentUser.uid, optionIndex: index, createdAt: serverTimestamp() });
-    });
+    }));
     if (feedback) feedback.innerHTML = '<div class="message ok">Voto registrado.</div>';
   } catch (error) {
     if (feedback) feedback.innerHTML = `<div class="message err">${error?.message === 'already-voted' ? 'Você já votou.' : 'Não foi possível votar.'}</div>`;
@@ -578,6 +584,10 @@ async function redeemReward(rewardId) {
     return;
   }
   try {
+    if(await platformSource.staging()) {
+      await financialAction(currentUser.uid,'reward.redeem',{liveId:streamId,rewardId});
+      if(feedback)feedback.textContent='Recompensa resgatada.';return;
+    }
     await ensureWallet(currentUser.uid);
     const rewardRef = doc(db, 'channels', stream.streamerUid, 'rewards', rewardId);
     const senderRef = doc(db, 'wallets', currentUser.uid);
@@ -714,14 +724,14 @@ function enhanceChatComposer() {
     const messageRef = doc(collection(db, 'streams', streamId, 'chat'));
     const rateRef = doc(db, 'streams', streamId, 'chatRate', currentUser.uid);
     try {
-      await runTransaction(db, async tx => {
+      await platformSource.run(()=>ownPlatform(currentUser.uid,'chat.send',{liveId:streamId,text,requestKey:messageRef.id}),()=>runTransaction(db, async tx => {
         const rate = await tx.get(rateRef);
         const last = rate.exists() ? timestampMs(rate.data().lastAt) : 0;
         const slow = Math.max(1, Math.min(120, Number(chatSettings?.slowModeSeconds || 0) || 1));
         if (last && Date.now() - last < slow * 1000) throw new Error('slow-mode');
         tx.set(messageRef, { uid: currentUser.uid, text, createdAt: serverTimestamp() });
         tx.set(rateRef, { uid: currentUser.uid, lastAt: serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + 2 * 60 * 60 * 1000) }, { merge: true });
-      });
+      }));
       input.value = '';
       const counter = root.querySelector('#chat-counter');
       if (counter) counter.textContent = '0/300';
