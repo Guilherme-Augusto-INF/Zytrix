@@ -1,5 +1,6 @@
 // Public messages deliberately omit provider payloads, addresses and internal details.
 export function neonAuthMessage(error, step='login') {
+ if(step==='google'&&['state_mismatch','STATE_MISMATCH'].includes(error?.code))return 'A confirmação do Google expirou ou perdeu a sessão. Volte à tela de login e inicie uma nova tentativa. Sua conta não foi vinculada.';
  if(error?.message==='authentication_changed')return 'A sessão mudou ou expirou. Entre novamente antes de vincular sua conta.';
  if(error?.message==='google_link_not_confirmed')return 'A vinculação Google ainda não foi confirmada. Entre pelo método original e tente novamente.';
  if(step==='google'&&error?.code==='account_already_linked_to_different_user')return 'Este acesso Google já está vinculado a outra conta. Entre com a conta correspondente; as contas não foram unidas.';

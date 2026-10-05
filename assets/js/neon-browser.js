@@ -1,17 +1,27 @@
 // Compatibility with the original V1 screens; these functions never load Firebase.
 import {createPlatformClient} from './staging-client.js';
 import {watchRealtime} from './realtime-client.js';
+import {createManagedClient} from './neon-managed-client.js';
 export const app=null,db=Object.freeze({backend:'neon'}),googleProvider={providerId:'google.com'};
 export const auth={currentUser:null};
 export class GoogleAuthProvider {}
 export const EmailAuthProvider={credential:(email,password)=>({email,password})};
 export const firebaseConfig=null;
-const listeners=new Set();let configPromise,refreshPromise,generation=0,loaded=false,jwtCache,jwtPending;
+const listeners=new Set();let configPromise,refreshPromise,generation=0,loaded=false,jwtCache,jwtPending,managedClient;
 const changes=globalThis.BroadcastChannel?new BroadcastChannel('zytrix-neon-session'):null;
 const platform=createPlatformClient(()=>auth.currentUser);
 async function config(){return configPromise??=fetch('/api/v1/config',{cache:'no-store'}).then(async r=>{const c=await r.json();if(!r.ok||!c.postgresStaging||c.authentication!=='neon'||!c.neonAuthUrl)throw Error('neon_auth_not_configured');return c;});}
 export async function authRequest(path,body) {
- const c=await config();const response=await fetch(c.neonAuthUrl+'/'+path,{method:body?'POST':'GET',credentials:'include',cache:'no-store',headers:body?{'Content-Type':'application/json'}:{},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(15000)});
+ const c=await config();
+ // Managed OAuth requires Neon's verifier exchange and cookie handling. Always
+ // fetch a fresh session: account linking must not rely on the SDK's UI cache.
+ if(['get-session','sign-in/social','link-social'].includes(path)){
+  managedClient??=createManagedClient(c.neonAuthUrl);
+  const result=await managedClient.$fetch('/'+path,{method:body?'POST':'GET',credentials:'include',cache:'no-store',headers:{'X-Force-Fetch':'true'},...(body?{body:{...body,...(path==='sign-in/social'?{disableRedirect:true}:{})}}:{}),signal:AbortSignal.timeout(15000)});
+  if(result.error)throw Object.assign(Error('authentication_failed'),{code:result.error.code??'authentication_failed',status:result.error.status});
+  return result.data;
+ }
+ const response=await fetch(c.neonAuthUrl+'/'+path,{method:body?'POST':'GET',credentials:'include',cache:'no-store',headers:body?{'Content-Type':'application/json'}:{},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(15000)});
  let value;try{value=await response.json();}catch{throw Object.assign(Error('authentication_unavailable'),{code:'authentication_unavailable',status:response.status});}
  if(!response.ok)throw Object.assign(Error('authentication_failed'),{code:value?.code??'authentication_failed',status:response.status,retryAfter:Math.min(3600,Math.max(60,Number(response.headers?.get?.('retry-after'))||60))});return value;
 }

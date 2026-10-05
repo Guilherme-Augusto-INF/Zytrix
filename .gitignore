@@ -1,4 +1,6 @@
 node_modules/
+assets/js/neon-managed-client.js
+assets/js/neon-managed-client.js.LEGAL.txt
 .firebase/
 .vercel/
 *-debug.log

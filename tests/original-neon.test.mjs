@@ -14,6 +14,7 @@ async function authAdapter(fetchImpl,platformImpl=async()=>({uid:'preserved',enr
   .replace(/^import .*;$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:class|function|const))/g,'');
  const context=vm.createContext({console,AbortSignal,URL,atob,queueMicrotask,fetch:fetchImpl,
   localStorage:{getItem:()=>null,removeItem(){},setItem(){}},BroadcastChannel:undefined,location:{href:'https://staging.invalid/login.html',assign:value=>redirects.push(value)},sessionStorage:{getItem:key=>stored.get(key),setItem:(key,value)=>stored.set(key,value),removeItem:key=>stored.delete(key)},
+  createManagedClient:base=>({$fetch:async(path,options)=>{const r=await fetchImpl(base+path,{...options,...(options.body?{body:JSON.stringify(options.body)}:{})});return r.ok?{data:await r.json()}:{error:{...await r.json(),status:r.status}};}}),
   createPlatformClient:()=>platformImpl,watchRealtime:()=>()=>{}});
  vm.runInContext(source+'\nglobalThis.adapter={auth,refreshSession,signInWithEmailAndPassword,createUserWithEmailAndPassword,authRequest,signOut,sendEmailVerification,sendPasswordResetEmail,linkGoogleAccount,confirmGoogleAccountLink};',context);
  context.adapter.stored=stored;context.adapter.redirects=redirects;
@@ -70,6 +71,7 @@ test('public subscriptions wait for initial session and restart after account re
  const context=vm.createContext({console,AbortSignal,URL,queueMicrotask,
   fetch:async url=>url==='/api/v1/config'?authConfig:new Promise(resolve=>{release=()=>resolve(response(null));}),
   setTimeout:fn=>{const key=++timerId;timers.set(key,fn);return key;},clearTimeout:key=>timers.delete(key),
+  createManagedClient:()=>({$fetch:()=>new Promise(resolve=>{release=()=>resolve({data:null});})}),
   createPlatformClient:()=>async()=>{calls++;return {documents:[{id:'public',username:'Streamer'}]};},watchRealtime:()=>()=>{},localStorage:{getItem:()=>null},BroadcastChannel:undefined});
  vm.runInContext(source+'\nglobalThis.stop=onSnapshot(doc(db,"profiles","public"),()=>globalThis.delivered());',Object.assign(context,{delivered:()=>delivered++}));
  await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,0);release();await new Promise(resolve=>setImmediate(resolve));assert.equal(delivered,1);
