@@ -1,4 +1,4 @@
-import {auth,onAuthStateChanged,authRequest,refreshSession,signInWithEmailAndPassword,createUserWithEmailAndPassword,sendEmailVerification,signInWithPopup,sendPasswordResetEmail} from './neon-browser.js';
+import {auth,onAuthStateChanged,authRequest,refreshSession,signInWithEmailAndPassword,createUserWithEmailAndPassword,sendEmailVerification,signInWithPopup,sendPasswordResetEmail,linkGoogleAccount,confirmGoogleAccountLink} from './neon-browser.js';
 import {createPlatformClient} from './staging-client.js';
 import {strongPassword,localRedirect} from './security.js';
 import {neonAuthMessage,verificationSender} from './neon-auth-errors.js';
@@ -11,10 +11,24 @@ export function initNeonAuthPage(form,show) {
  globalThis.addEventListener('pagehide',()=>clearInterval(resendTimer),{once:true});
  let username=sessionStorage.getItem('zytrixNeonEnrollmentName')??'';
  const destination=localRedirect(new URLSearchParams(location.search).get('redirect'),'index.html');
+ let googleLinkNeeded=mode==='login'&&(new URLSearchParams(location.search).get('error')==='account_not_linked'||new URLSearchParams(location.search).has('error')&&!!sessionStorage.getItem('zytrixNeonGoogleLinkSubject')),googleLinkBusy=false,googleLinkReturn=mode==='login'&&new URLSearchParams(location.search).get('linked')==='google',googleLinkConfirmation;
  async function finish(user) {
   if(verificationEmail&&user&&user.email?.toLowerCase()!==verificationEmail){show('A sessão mudou. Entre novamente com a conta que está verificando.');return;}
   if(user?.pendingVerification)verificationEmail=user.email.toLowerCase();
   if(!user){show('Entre com sua senha para continuar.');return;}
+  if(user.emailVerified&&googleLinkReturn){
+   try{await (googleLinkConfirmation??=confirmGoogleAccountLink());show('Google vinculado à sua conta.','ok');}
+   catch(error){googleLinkNeeded=true;show(neonAuthMessage(error,'google'));}
+   finally{googleLinkReturn=false;}
+  }
+  if(user.emailVerified&&googleLinkNeeded){
+   clearInterval(resendTimer);extra.replaceChildren();
+   const explanation=document.createElement('p');explanation.textContent='Você entrou pelo método original. Confirme no Google para vincular o acesso a esta conta, preservando seu perfil e saldo.';
+   const button=document.createElement('button');button.type='button';button.className='btn btn-primary';button.textContent='Vincular Google à minha conta';
+   button.onclick=async()=>{if(googleLinkBusy)return;googleLinkBusy=true;button.disabled=true;try{await linkGoogleAccount();}catch(error){show(neonAuthMessage(error,'google'));}finally{googleLinkBusy=false;button.disabled=false;}};
+   const skip=document.createElement('button');skip.type='button';skip.className='btn';skip.textContent='Continuar sem vincular';skip.onclick=()=>{if(googleLinkBusy)return;googleLinkNeeded=false;void finish(user).catch(error=>show(neonAuthMessage(error)));};
+   extra.append(explanation,button,skip);return;
+  }
   if(user.emailVerified&&!user.enrollmentRequired){location.assign(destination);return;}
   clearInterval(resendTimer);extra.replaceChildren();
   const title=document.createElement('h2');title.textContent='Concluir sua conta no staging';extra.append(title);

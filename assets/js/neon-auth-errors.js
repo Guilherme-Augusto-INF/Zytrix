@@ -1,5 +1,8 @@
 // Public messages deliberately omit provider payloads, addresses and internal details.
 export function neonAuthMessage(error, step='login') {
+ if(error?.message==='authentication_changed')return 'A sessão mudou ou expirou. Entre novamente antes de vincular sua conta.';
+ if(error?.message==='google_link_not_confirmed')return 'A vinculação Google ainda não foi confirmada. Entre pelo método original e tente novamente.';
+ if(step==='google'&&error?.code==='account_already_linked_to_different_user')return 'Este acesso Google já está vinculado a outra conta. Entre com a conta correspondente; as contas não foram unidas.';
  if(step==='google'&&error?.code==='account_not_linked')return 'Esta conta ainda não está vinculada ao Google. Entre pelo método usado no cadastro. A vinculação precisa confirmar as duas identidades.';
  if(error?.status===429)return 'Muitas tentativas. Aguarde antes de tentar novamente.';
  if(error?.code==='EMAIL_NOT_VERIFIED')return 'Verifique seu e-mail antes de entrar. Você pode solicitar outro código abaixo.';

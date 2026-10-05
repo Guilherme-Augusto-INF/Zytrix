@@ -9,12 +9,14 @@ test('disabled or deleted managed subjects cannot enroll or link using an unexpi
   await assert.rejects(executePlatform(missing,identity,action,{}),e=>e.code==='account_disabled'&&e.status===403);
 });
 async function authAdapter(fetchImpl,platformImpl=async()=>({uid:'preserved',enrollmentRequired:false})){
+ const stored=new Map(),redirects=[];
  const source=(await readFile(new URL('../assets/js/neon-browser.js',import.meta.url),'utf8'))
   .replace(/^import .*;$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:class|function|const))/g,'');
  const context=vm.createContext({console,AbortSignal,URL,atob,queueMicrotask,fetch:fetchImpl,
-  localStorage:{getItem:()=>null,removeItem(){},setItem(){}},BroadcastChannel:undefined,location:{href:'https://staging.invalid/login.html'},
+  localStorage:{getItem:()=>null,removeItem(){},setItem(){}},BroadcastChannel:undefined,location:{href:'https://staging.invalid/login.html',assign:value=>redirects.push(value)},sessionStorage:{getItem:key=>stored.get(key),setItem:(key,value)=>stored.set(key,value),removeItem:key=>stored.delete(key)},
   createPlatformClient:()=>platformImpl,watchRealtime:()=>()=>{}});
- vm.runInContext(source+'\nglobalThis.adapter={auth,refreshSession,signInWithEmailAndPassword,createUserWithEmailAndPassword,authRequest,signOut,sendEmailVerification,sendPasswordResetEmail};',context);
+ vm.runInContext(source+'\nglobalThis.adapter={auth,refreshSession,signInWithEmailAndPassword,createUserWithEmailAndPassword,authRequest,signOut,sendEmailVerification,sendPasswordResetEmail,linkGoogleAccount,confirmGoogleAccountLink};',context);
+ context.adapter.stored=stored;context.adapter.redirects=redirects;
  return context.adapter;
 }
 const response=value=>({ok:true,json:async()=>value});
@@ -104,6 +106,33 @@ test('verification-required signup returns a pending account without inventing a
  const a=await authAdapter(async url=>{if(url==='/api/v1/config')return authConfig;if(url.endsWith('/sign-up/email'))return response({user:{id:'new',email:'fixture@example.invalid',emailVerified:false},token:null});sessionReads++;return response(null);},async()=>{enrollments++;});
  const result=await a.createUserWithEmailAndPassword(a.auth,'fixture@example.invalid','fixture-only');
  assert.equal(result.user.pendingVerification,true);assert.equal(result.user.email,'fixture@example.invalid');assert.equal(a.auth.currentUser,null);assert.equal(sessionReads,0);assert.equal(enrollments,0);assert.equal(result.user.getIdToken,undefined);
+});
+
+test('Google linking requires a fresh verified session and never uses implicit sign-in',async()=>{
+ const calls=[];let actual='subject-a',verified=true;
+ const a=await authAdapter(async(url,options)=>{if(url==='/api/v1/config')return authConfig;calls.push({url,body:options?.body&&JSON.parse(options.body)});return response(url.endsWith('/get-session')?{user:{id:actual,emailVerified:verified},session:{id:'session-a'}}:{url:'https://accounts.google.com/oauth'});});
+ await assert.rejects(a.linkGoogleAccount(),/authentication_changed/);assert.equal(calls.length,0);
+ a.auth.currentUser={subject:'subject-a',emailVerified:true};actual='subject-b';
+ await assert.rejects(a.linkGoogleAccount(),/authentication_changed/);assert.equal(calls.some(x=>x.url.endsWith('/link-social')),false);
+ actual='subject-a';verified=false;await assert.rejects(a.linkGoogleAccount(),/authentication_changed/);
+ verified=true;await a.linkGoogleAccount();
+ const link=calls.find(x=>x.url.endsWith('/link-social'));assert.equal(link.body.provider,'google');assert.equal(link.body.callbackURL,'https://staging.invalid/login.html?linked=google');assert.equal(link.body.email,undefined);assert.equal(link.body.userId,undefined);
+ assert.equal(a.stored.get('zytrixNeonGoogleLinkSubject'),'subject-a');assert.equal(a.redirects.length,1);assert.equal(calls.some(x=>x.url.endsWith('/sign-in/social')),false);
+});
+
+test('Google callback marker cannot certify linking without matching session and server account',async()=>{
+ let accounts=[];const a=await authAdapter(async url=>url==='/api/v1/config'?authConfig:response(url.endsWith('/get-session')?{user:{id:'subject-a',emailVerified:true},session:{id:'session-a'}}:accounts));
+ a.auth.currentUser={subject:'subject-a',emailVerified:true};
+ await assert.rejects(a.confirmGoogleAccountLink(),/authentication_changed/);
+ a.stored.set('zytrixNeonGoogleLinkSubject','subject-b');await assert.rejects(a.confirmGoogleAccountLink(),/authentication_changed/);
+ a.stored.set('zytrixNeonGoogleLinkSubject','subject-a');await assert.rejects(a.confirmGoogleAccountLink(),/google_link_not_confirmed/);
+ accounts=[{providerId:'google',userId:'subject-b'}];await assert.rejects(a.confirmGoogleAccountLink(),/google_link_not_confirmed/);
+ accounts=[{providerId:'google',userId:'subject-a'}];assert.equal(await a.confirmGoogleAccountLink(),true);assert.equal(a.stored.has('zytrixNeonGoogleLinkSubject'),false);
+});
+
+test('account replacement while Google link is starting prevents redirect or local certification',async()=>{
+ let release;const a=await authAdapter(async url=>{if(url==='/api/v1/config')return authConfig;if(url.endsWith('/get-session'))return response({user:{id:'subject-a',emailVerified:true},session:{id:'session-a'}});return new Promise(resolve=>{release=()=>resolve(response({url:'https://accounts.google.com/oauth'}));});});
+ a.auth.currentUser={subject:'subject-a',emailVerified:true};const pending=a.linkGoogleAccount();await new Promise(resolve=>setImmediate(resolve));a.auth.currentUser={subject:'subject-b',emailVerified:true};release();await assert.rejects(pending,/authentication_changed/);assert.equal(a.redirects.length,0);assert.equal(a.stored.size,0);
 });
 
 test('verification uses the configured managed method and neither mail request accepts explicit failure',async()=>{

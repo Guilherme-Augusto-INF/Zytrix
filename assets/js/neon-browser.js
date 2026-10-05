@@ -61,6 +61,25 @@ export async function createUserWithEmailAndPassword(_auth,email,password){
  generation++;await refreshPromise?.catch(()=>{});localStorage.removeItem('zytrixNeonSignedOut');await refreshSession();changes?.postMessage('changed');return {user:auth.currentUser};
 }
 export async function signInWithPopup(){const result=await authRequest('sign-in/social',{provider:'google',callbackURL:new URL('login.html',location.href).href,errorCallbackURL:new URL('login.html',location.href).href});if(result.url){localStorage.removeItem('zytrixNeonSignedOut');location.assign(result.url);}throw Error('oauth_redirect');}
+async function googleLinkSession(subject){
+ if(!subject||auth.currentUser?.subject!==subject||!auth.currentUser.emailVerified)throw Error('authentication_changed');
+ const session=await authRequest('get-session');
+ if(auth.currentUser?.subject!==subject||session?.user?.id!==subject||!session.session||session.user.emailVerified!==true||session.user.banned)throw Error('authentication_changed');
+}
+export async function linkGoogleAccount(){
+ const subject=auth.currentUser?.subject;await googleLinkSession(subject);
+ const callback=new URL('login.html',location.href);callback.searchParams.set('linked','google');
+ const result=await authRequest('link-social',{provider:'google',callbackURL:callback.href,errorCallbackURL:new URL('login.html',location.href).href});
+ if(auth.currentUser?.subject!==subject||!result?.url)throw Error('authentication_changed');
+ sessionStorage.setItem('zytrixNeonGoogleLinkSubject',subject);
+ location.assign(result.url);
+}
+export async function confirmGoogleAccountLink(){
+ const subject=sessionStorage.getItem('zytrixNeonGoogleLinkSubject');await googleLinkSession(subject);
+ const accounts=await authRequest('list-accounts');
+ if(auth.currentUser?.subject!==subject||!Array.isArray(accounts)||!accounts.some(account=>account.providerId==='google'&&account.userId===subject))throw Error('google_link_not_confirmed');
+ sessionStorage.removeItem('zytrixNeonGoogleLinkSubject');return true;
+}
 export async function signOut(){
  try{if(auth.currentUser)await platform('auth.logout');}
  catch(error){if(!['authentication_required','account_disabled'].includes(error.code))throw error;}
