@@ -7,6 +7,7 @@ export function initNeonAuthPage(form,show) {
  const mode=form?.dataset.mode;
  const extra=document.createElement('section');form?.insertAdjacentElement('afterend',extra);
  const sender=verificationSender(sendEmailVerification);let resendTimer,submitting=false,verificationEmail=null;
+ const resetSender=verificationSender(user=>sendPasswordResetEmail(auth,user.email));
  globalThis.addEventListener('pagehide',()=>clearInterval(resendTimer),{once:true});
  let username=sessionStorage.getItem('zytrixNeonEnrollmentName')??'';
  const destination=localRedirect(new URLSearchParams(location.search).get('redirect'),'index.html');
@@ -51,13 +52,13 @@ export function initNeonAuthPage(form,show) {
    const result=await createUserWithEmailAndPassword(auth,email,password);await finish(result.user);
    if(result.user?.pendingVerification){step='send';try{await sender.request(result.user);show('Conta criada. Solicitação de código aceita; confira a caixa de entrada e o spam.','ok');}catch(error){show('Conta criada, aguardando verificação. '+neonAuthMessage(error,'send'));}}
   }
-  if(mode==='reset'){const token=new URLSearchParams(location.search).get('token');if(token){step='password';if(!strongPassword(password))throw Error('invalid_password');await authRequest('reset-password',{token,newPassword:password});show('Senha atualizada. Entre novamente.','ok');}else{await sendPasswordResetEmail(auth,email);show('Se existir uma conta elegível, as instruções de recuperação serão enviadas.','ok');}}
+  if(mode==='reset'){const token=new URLSearchParams(location.search).get('token');if(token){step='password';if(!strongPassword(password))throw Error('invalid_password');await authRequest('reset-password',{token,newPassword:password});show('Senha atualizada. Entre novamente.','ok');}else{await resetSender.request({email});show('Solicitação aceita. Se existir uma conta elegível, confira a caixa de entrada e o spam. O recebimento ainda precisa ser confirmado.','ok');}}
  }catch(error){
   if(mode==='login'&&error.code==='EMAIL_NOT_VERIFIED')await finish({email,emailVerified:false,pendingVerification:true,enrollmentRequired:true});
   show(['invalid_signup','invalid_password'].includes(error.message)?'Use um nome válido e senha com pelo menos 10 caracteres, letra e número.':neonAuthMessage(error,step));
  }finally{submitting=false;if(button)button.disabled=false;if(form.elements.password)form.elements.password.value='';}});
  if(mode==='reset'&&new URLSearchParams(location.search).has('token')){form.elements.email.required=false;form.elements.email.closest('.form-group')?.setAttribute('hidden','');const field=document.createElement('input');field.name='password';field.type='password';field.className='input';field.autocomplete='new-password';field.required=true;field.placeholder='Nova senha';form.prepend(field);}
  document.querySelector('#google-login')?.addEventListener('click',async e=>{const button=e.currentTarget;button.disabled=true;try{await signInWithPopup();}catch(error){if(error.message!=='oauth_redirect')show(neonAuthMessage(error,'google'));}finally{button.disabled=false;}});
- if(new URLSearchParams(location.search).has('error'))show(neonAuthMessage({code:new URLSearchParams(location.search).get('error')},'google'));
+ if(new URLSearchParams(location.search).has('error'))show(neonAuthMessage({code:new URLSearchParams(location.search).get('error')},mode==='reset'?'password':'google'));
  onAuthStateChanged(auth,user=>{if(user&&mode!=='reset')void finish(user).catch(error=>show(neonAuthMessage(error)));});
 }

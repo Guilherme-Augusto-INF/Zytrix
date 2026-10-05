@@ -12,9 +12,9 @@ async function authAdapter(fetchImpl,platformImpl=async()=>({uid:'preserved',enr
  const source=(await readFile(new URL('../assets/js/neon-browser.js',import.meta.url),'utf8'))
   .replace(/^import .*;$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:class|function|const))/g,'');
  const context=vm.createContext({console,AbortSignal,URL,atob,queueMicrotask,fetch:fetchImpl,
-  localStorage:{getItem:()=>null,removeItem(){},setItem(){}},BroadcastChannel:undefined,
+  localStorage:{getItem:()=>null,removeItem(){},setItem(){}},BroadcastChannel:undefined,location:{href:'https://staging.invalid/login.html'},
   createPlatformClient:()=>platformImpl,watchRealtime:()=>()=>{}});
- vm.runInContext(source+'\nglobalThis.adapter={auth,refreshSession,signInWithEmailAndPassword,createUserWithEmailAndPassword,authRequest,signOut};',context);
+ vm.runInContext(source+'\nglobalThis.adapter={auth,refreshSession,signInWithEmailAndPassword,createUserWithEmailAndPassword,authRequest,signOut,sendEmailVerification,sendPasswordResetEmail};',context);
  return context.adapter;
 }
 const response=value=>({ok:true,json:async()=>value});
@@ -104,6 +104,29 @@ test('verification-required signup returns a pending account without inventing a
  const a=await authAdapter(async url=>{if(url==='/api/v1/config')return authConfig;if(url.endsWith('/sign-up/email'))return response({user:{id:'new',email:'fixture@example.invalid',emailVerified:false},token:null});sessionReads++;return response(null);},async()=>{enrollments++;});
  const result=await a.createUserWithEmailAndPassword(a.auth,'fixture@example.invalid','fixture-only');
  assert.equal(result.user.pendingVerification,true);assert.equal(result.user.email,'fixture@example.invalid');assert.equal(a.auth.currentUser,null);assert.equal(sessionReads,0);assert.equal(enrollments,0);assert.equal(result.user.getIdToken,undefined);
+});
+
+test('verification uses the configured managed method and neither mail request accepts explicit failure',async()=>{
+ const calls=[];let failed=false;
+ const a=await authAdapter(async(url,options)=>{if(url==='/api/v1/config')return authConfig;calls.push({url,body:JSON.parse(options.body)});return response(failed?{status:false,message:'private SMTP diagnostic'}:{status:true});});
+ await a.sendEmailVerification({email:'fixture@example.invalid'});
+ assert.equal(calls[0].url,'https://staging.invalid/auth/send-verification-email');
+ assert.equal(calls[0].body.callbackURL,'https://staging.invalid/login.html');
+ await a.sendPasswordResetEmail(a.auth,'fixture@example.invalid');
+ assert.equal(calls[1].url,'https://staging.invalid/auth/request-password-reset');
+ assert.equal(calls[1].body.redirectTo,'https://staging.invalid/recuperar-senha.html');
+ failed=true;
+ for(const request of [()=>a.sendEmailVerification({email:'fixture@example.invalid'}),()=>a.sendPasswordResetEmail(a.auth,'fixture@example.invalid')])await assert.rejects(request(),e=>e.code==='email_request_rejected'&&!e.message.includes('private'));
+});
+
+test('an expired reset callback explains recovery rather than blaming Google',async()=>{
+ const {neonAuthMessage,verificationSender}=await import('../assets/js/neon-auth-errors.js');
+ const source=(await readFile(new URL('../assets/js/neon-auth-page.js',import.meta.url),'utf8')).replace(/^import .*;$/gm,'').replace('export function','function');
+ const messages=[];
+ const context=vm.createContext({URLSearchParams,location:{search:'?error=INVALID_TOKEN'},sessionStorage:{getItem:()=>null},document:{createElement:()=>({}),querySelector:()=>null},createPlatformClient:()=>()=>{},localRedirect:()=> 'index.html',auth:{},sendEmailVerification(){},sendPasswordResetEmail(){},verificationSender,neonAuthMessage,onAuthStateChanged(){},addEventListener(){},clearInterval});
+ vm.runInContext(source+'\nglobalThis.init=initNeonAuthPage;',context);
+ context.init({dataset:{mode:'reset'},insertAdjacentElement(){},addEventListener(){}},text=>messages.push(text));
+ assert.match(messages[0],/link pode ter expirado/);assert.doesNotMatch(messages[0],/Google/);
 });
 
 test('provider failures preserve a safe code and Retry-After but never expose internal messages',async()=>{

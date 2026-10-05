@@ -68,8 +68,8 @@ export async function signOut(){
   try{await authRequest('sign-out',{});}catch(error){if(error.status!==401)throw error;}
  }
 }
-export async function sendEmailVerification(user){await authRequest('email-otp/send-verification-otp',{email:user.email,type:'email-verification'});}
-export async function sendPasswordResetEmail(_auth,email){await authRequest('request-password-reset',{email,redirectTo:new URL('recuperar-senha.html',location.href).href});}
+export async function sendEmailVerification(user){const result=await authRequest('send-verification-email',{email:user.email,callbackURL:new URL('login.html',location.href).href});if(result?.status===false||result?.success===false)throw Object.assign(Error('email_request_rejected'),{code:'email_request_rejected'});}
+export async function sendPasswordResetEmail(_auth,email){const result=await authRequest('request-password-reset',{email,redirectTo:new URL('recuperar-senha.html',location.href).href});if(result?.status===false||result?.success===false)throw Object.assign(Error('email_request_rejected'),{code:'email_request_rejected'});}
 export async function reauthenticateWithCredential(_user,credential){return signInWithEmailAndPassword(auth,credential.email,credential.password);}
 export const reauthenticateWithPopup=signInWithPopup;
 export async function deleteUser(){throw Error('account_deletion_not_enabled');}
