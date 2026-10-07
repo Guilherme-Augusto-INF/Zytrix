@@ -107,7 +107,7 @@ function renderLives() {
 }
 
 function renderGrid(element, items, count, message) {
-  const slot = '<div class="card home-live-slot" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div>';
+  const slot = '<div class="card home-live-slot home-live-empty" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div>';
   element.innerHTML = items.map(liveCard).join('') + slot.repeat(count - items.length)
     + (!items.length ? `<div class="state home-live-state" role="status">${escapeHtml(message)}</div>` : '');
   element.setAttribute('aria-busy', 'false');
