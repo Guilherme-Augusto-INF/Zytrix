@@ -47,8 +47,8 @@ test('senha local exige ao menos 10 caracteres, letra e número', () => {
 });
 
 
-test('URLs de imagem aceitas respeitam os mesmos hosts das regras Firestore', () => {
-  assert.ok(safeImageUrl('https://firebasestorage.googleapis.com/v0/b/zytrix-ca4f2/o/test.png?alt=media'));
+test('URLs de imagem aceitas respeitam os mesmos hosts das allowlist de imagens', () => {
+  assert.equal(safeImageUrl('https://untrusted.invalid/avatar.png'),'');
   assert.ok(safeImageUrl('https://images.kick.com/sample.jpg'));
   assert.equal(safeImageUrl('https://i.imgur.com/example.png'), '');
   assert.equal(safeImageUrl('https://example.com/photo.jpg'), '');

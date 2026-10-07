@@ -1,4 +1,5 @@
-import { auth, db, onAuthStateChanged, doc, getDoc, onSnapshot, collection, query, orderBy, limit, setDoc, deleteDoc, runTransaction, increment, serverTimestamp, Timestamp, ensureWallet } from './firebase.js';
+import { platformSource, ownPlatform, financialAction } from './platform-backend.js';
+import { auth, db, onAuthStateChanged, doc, getDoc, onSnapshot, collection, query, orderBy, limit, setDoc, deleteDoc, runTransaction, increment, serverTimestamp, Timestamp, ensureWallet } from './client.js';
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
 import { reportLink } from './report-link.js';
 import { getStreamingEmbed, streamingPlatformLabel } from './streaming.js';
@@ -336,12 +337,33 @@ function updateChatComposerState() {
 }
 async function sendChatMessage() {
     const feedback = document.querySelector('#chat-feedback');
-    if (!user) { setChatFeedback('Faça login para enviar mensagens.', true); return; }
-    if (!user.emailVerified) { setChatFeedback('Verifique seu e-mail para conversar.', true); return; }
-    // O envio real é instalado por live-extras.js, que usa chatRate atômico.
-    if (feedback) feedback.textContent = 'Preparando envio seguro...';
+    if (!user) {
+        setChatFeedback('Faça login para enviar mensagens.', true);
+        return;
+    }
+    if (!user.emailVerified) {
+        setChatFeedback('Verifique seu e-mail para conversar.', true);
+        return;
+    }
+    {
+        const input = document.querySelector('#chat-input'), text = input?.value.trim();
+        if (!text || text.length > 300)
+            return;
+        try {
+            await ownPlatform(user.uid, 'chat.send', { liveId: streamId, text, requestKey: crypto.randomUUID() });
+            if (input.isConnected)
+                input.value = '';
+            setChatFeedback('Enviado.', false);
+        }
+        catch {
+            setChatFeedback('Não foi possível enviar. Verifique as regras e aguarde o slow mode.', true);
+        }
+        return;
+    }
+    // O envio legado é instalado por live-extras.js, que usa chatRate atômico.
+    if (feedback)
+        feedback.textContent = 'Preparando envio seguro...';
 }
-
 function setChatFeedback(message, isError) {
     const feedback = document.querySelector('#chat-feedback');
     if (!feedback)
@@ -364,8 +386,8 @@ function startRealtimeChat() {
             .reverse();
         const hydrated = await Promise.all(messages.map(async (message) => ({
             ...message,
-            profile: await getCachedProfile(message.uid),
-            isAdmin: await isAdminUid(message.uid)
+            profile: message.username !== undefined ? { username: message.username || 'Usuário', photoURL: message.photoURL || '' } : await getCachedProfile(message.uid),
+            isAdmin: message.isAdmin ?? await isAdminUid(message.uid)
         })));
         if (version !== chatRenderVersion)
             return;
@@ -377,7 +399,7 @@ function startRealtimeChat() {
             container.innerHTML = `
           <div class="state chat-loading">
             Não foi possível carregar o chat.<br>
-            <small>Confira as regras do Firestore.</small>
+            <small>Confira as regras do backend.</small>
           </div>`;
         }
     });
@@ -575,7 +597,10 @@ async function support() {
         msg.innerHTML = '<div class="message err">Entre na sua conta para apoiar.</div>';
         return;
     }
-    if (!user.emailVerified) { msg.innerHTML = '<div class="message err">Verifique seu e-mail para usar Zy Coins.</div>'; return; }
+    if (!user.emailVerified) {
+        msg.innerHTML = '<div class="message err">Verifique seu e-mail para usar Zy Coins.</div>';
+        return;
+    }
     if (user.uid === stream.streamerUid) {
         msg.innerHTML = '<div class="message err">Você não pode apoiar a própria live.</div>';
         return;
@@ -591,6 +616,11 @@ async function support() {
         return;
     }
     try {
+        {
+            await financialAction(user.uid, 'support.send', { liveId: stream.id, amount });
+            msg.textContent = `Apoio de ◈ ${amount.toLocaleString('pt-BR')} enviado!`;
+            return;
+        }
         await ensureWallet(user.uid);
         const senderRef = doc(db, 'wallets', user.uid);
         const recipientRef = doc(db, 'wallets', stream.streamerUid);
@@ -684,7 +714,8 @@ else {
         const nextProfile = nextStream.streamerUid
             ? await getCachedProfile(nextStream.streamerUid)
             : null;
-        if (version !== liveSnapshotVersion) return;
+        if (version !== liveSnapshotVersion)
+            return;
         stream = nextStream;
         streamerProfile = nextProfile;
         // Do not interrupt playback on presence/viewer-count or timestamp changes.
@@ -695,7 +726,8 @@ else {
         ]);
         if (layoutSignature === lastLiveLayoutSignature) {
             const counter = document.querySelector('#live-viewer-count');
-            if (counter) counter.textContent = '👁 ' + Math.max(0, Number(stream.viewerCount || 0)).toLocaleString('pt-BR');
+            if (counter)
+                counter.textContent = '👁 ' + Math.max(0, Number(stream.viewerCount || 0)).toLocaleString('pt-BR');
             updateChatComposerState();
             return;
         }

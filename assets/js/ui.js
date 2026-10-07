@@ -1,11 +1,11 @@
-import { auth, onAuthStateChanged } from './firebase.js';
+import { auth, onAuthStateChanged } from './client.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
-
 export function header(active = '') {
     const element = document.querySelector('[data-header]');
-    if (!element) return;
-
-    if (!element.querySelector('.site-header')) element.innerHTML = `
+    if (!element)
+        return;
+    if (!element.querySelector('.site-header'))
+        element.innerHTML = `
     <header class="site-header">
       <div class="container nav">
         <a class="brand" href="index.html" aria-label="Zytrix - Início">
@@ -33,38 +33,36 @@ export function header(active = '') {
       </div>
     </header>
   `;
-
     onAuthStateChanged(auth, user => {
         const guest = document.querySelector('#guest-nav');
         const profile = document.querySelector('#profile-nav');
-        if (!guest || !profile) return;
-
+        if (!guest || !profile)
+            return;
         if (user) {
+            if(user.enrollmentRequired&&!document.querySelector('[data-auth-form]')&&!location.pathname.endsWith('/sair.html')){location.replace('login.html?redirect='+encodeURIComponent(location.pathname+location.search));return;}
             guest.classList.add('hidden');
             profile.classList.remove('hidden');
-        } else {
+        }
+        else {
             guest.classList.remove('hidden');
             profile.classList.add('hidden');
         }
     });
 }
-
 function ensureFooterStyles() {
-    if (document.querySelector('link[data-zytrix-footer-style]')) return;
-
+    if (document.querySelector('link[data-zytrix-footer-style]'))
+        return;
     const stylesheet = document.createElement('link');
     stylesheet.rel = 'stylesheet';
     stylesheet.href = 'assets/css/footer.css';
     stylesheet.dataset.zytrixFooterStyle = 'true';
     document.head.append(stylesheet);
 }
-
 export function footer() {
     const element = document.querySelector('[data-footer]');
-    if (!element) return;
-
+    if (!element)
+        return;
     ensureFooterStyles();
-
     element.innerHTML = `
     <footer class="site-footer site-footer-v2">
       <div class="container footer-shell">
@@ -97,11 +95,9 @@ export function footer() {
     </footer>
   `;
 }
-
 export function liveCard(live, options = {}) {
     const source = parseStreamingSource(live.playbackURL || '');
     const platform = source ? streamingPlatformLabel(source.platform) : '';
-
     return `
     <article class="card live-card" data-live-id="${escapeAttr(live.id)}">
       <div class="thumb">
@@ -123,7 +119,6 @@ export function liveCard(live, options = {}) {
     </article>
   `;
 }
-
 export function liveMeta(live) {
     const initial = (live.username || 'S').charAt(0).toUpperCase();
     return `<div class="live-meta">
@@ -139,7 +134,6 @@ export function liveMeta(live) {
       </div>
   `;
 }
-
 export function escapeHtml(value = '') {
     return String(value).replace(/[&<>'"]/g, character => ({
         '&': '&amp;',
@@ -149,29 +143,7 @@ export function escapeHtml(value = '') {
         '"': '&quot;'
     })[character]);
 }
-
 export function escapeAttr(value = '') {
     return escapeHtml(value);
 }
-
-export const categories = {
-    Gaming: ['Ação / Aventura', 'RPG', 'Esportes', 'Simulação'],
-    Música: ['Rock', 'Sertanejo', 'Eletrônica', 'Funk'],
-    'Just Chatting': ['Bate-Papo', 'Perguntas e Respostas', 'Histórias', 'Desafios'],
-    Criatividade: ['Desenho', 'Design', 'Fotografia', 'Edição'],
-    Esportes: ['Futebol', 'Basquete', 'Automobilismo', 'Lutas'],
-    Tecnologia: ['Programação', 'Hardware', 'Inteligência Artificial', 'Ciência e Tech'],
-    Podcasts: ['Conversas', 'Entrevistas', 'Notícias', 'Entretenimento'],
-    IRL: ['Viagens', 'Eventos', 'Vida Cotidiana', 'Exploração']
-};
-
-export const icons = {
-    Gaming: '🎮',
-    Música: '🎵',
-    'Just Chatting': '🎙️',
-    Criatividade: '🎨',
-    Esportes: '⚽',
-    Tecnologia: '💻',
-    Podcasts: '🎧',
-    IRL: '📹'
-};
+export { categories, icons } from './categories-data.js';

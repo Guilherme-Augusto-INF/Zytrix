@@ -1,51 +1,37 @@
-import {
-  auth,
-  db,
-  onAuthStateChanged,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  setDoc,
-  runTransaction,
-  serverTimestamp,
-  ensureWallet
-} from './firebase.js';
+import { platformSource, ownPlatform } from './platform-backend.js';
+import { auth, db, onAuthStateChanged, collection, doc, getDoc, getDocs, query, where, setDoc, runTransaction, serverTimestamp, ensureWallet } from './client.js';
 import { escapeHtml, escapeAttr } from './ui.js';
-
 const root = document.querySelector('#profile-root');
 let user = null;
 let observer = null;
 let promotions = [];
 let claimed = new Set();
-
 function tsMs(value) {
-  return value?.toDate?.()?.getTime?.() || 0;
+    return value?.toDate?.()?.getTime?.() || 0;
 }
-
 async function load() {
-  if (!user || !root) return;
-  const snap = await getDocs(collection(db, 'coinPromotions')).catch(() => null);
-  const now = Date.now();
-  promotions = (snap?.docs || []).map(item => ({ id: item.id, ...item.data() })).filter(item => item.active === true && (!tsMs(item.startsAt) || tsMs(item.startsAt) <= now) && (!tsMs(item.endsAt) || tsMs(item.endsAt) >= now));
-  claimed = new Set();
-  await Promise.all(promotions.map(async item => {
-    const claim = await getDoc(doc(db, 'coinPromotions', item.id, 'claims', user.uid)).catch(() => null);
-    if (claim?.exists?.()) claimed.add(item.id);
-  }));
-  mount();
+    if (!user || !root)
+        return;
+    const snap = await getDocs(collection(db, 'coinPromotions')).catch(() => null);
+    const now = Date.now();
+    promotions = (snap?.docs || []).map(item => ({ id: item.id, ...item.data() })).filter(item => item.active === true && (!tsMs(item.startsAt) || tsMs(item.startsAt) <= now) && (!tsMs(item.endsAt) || tsMs(item.endsAt) >= now));
+    claimed = new Set();
+    await Promise.all(promotions.map(async (item) => {
+        const claim = await getDoc(doc(db, 'coinPromotions', item.id, 'claims', user.uid)).catch(() => null);
+        if (claim?.exists?.())
+            claimed.add(item.id);
+    }));
+    mount();
 }
-
 function mount() {
-  const plus = root.querySelector('#profile-plus');
-  if (!plus || !user) return;
-  plus.querySelector('#profile-promotions')?.remove();
-  const section = document.createElement('div');
-  section.id = 'profile-promotions';
-  section.className = 'card panel';
-  section.innerHTML = `
+    const plus = root.querySelector('#profile-plus');
+    if (!plus || !user)
+        return;
+    plus.querySelector('#profile-promotions')?.remove();
+    const section = document.createElement('div');
+    section.id = 'profile-promotions';
+    section.className = 'card panel';
+    section.innerHTML = `
     <div class="eyebrow">EVENTOS E BÔNUS</div>
     <h2>Zy Coins promocionais</h2>
     <p class="muted">Promoções são criadas pela administração e cada conta só pode resgatar uma vez por evento. O limite total também é controlado no mesmo fluxo atômico.</p>
@@ -54,31 +40,39 @@ function mount() {
     </div>
     <div id="promo-feedback"></div>
   `;
-  plus.appendChild(section);
-  section.querySelectorAll('[data-claim-promo]').forEach(button => button.addEventListener('click', () => claimPromotion(button.dataset.claimPromo)));
+    plus.appendChild(section);
+    section.querySelectorAll('[data-claim-promo]').forEach(button => button.addEventListener('click', () => claimPromotion(button.dataset.claimPromo)));
 }
-
 function feedback(text, error = false) {
-  const el = document.querySelector('#promo-feedback');
-  if (el) el.innerHTML = `<div class="message ${error ? 'err' : 'ok'}">${escapeHtml(text)}</div>`;
+    const el = document.querySelector('#promo-feedback');
+    if (el)
+        el.innerHTML = `<div class="message ${error ? 'err' : 'ok'}">${escapeHtml(text)}</div>`;
 }
-
 async function claimPromotion(promotionId) {
-  alert('Resgates promocionais estão temporariamente pausados enquanto a emissão de Zy Coins migra para o backend seguro.');
+    {
+        alert('Resgates promocionais temporariamente pausados.');
+        return;
+    }
+    try {
+        await ownPlatform(user.uid, 'promotion.claim', { promotionId });
+        await load();
+        feedback('Promoção resgatada.');
+    }
+    catch (error) {
+        feedback('Não foi possível resgatar a promoção.', true);
+    }
 }
-
 function tryMount() {
-  if (root?.querySelector('#profile-plus')) mount();
+    if (root?.querySelector('#profile-plus') && !root.querySelector('#profile-promotions'))
+        mount();
 }
-
 onAuthStateChanged(auth, current => {
-  user = current;
-  if (user) load();
+    user = current;
+    if (user)
+        load();
 });
-
 if (root) {
-  observer = new MutationObserver(tryMount);
-  observer.observe(root, { childList: true, subtree: false });
+    observer = new MutationObserver(tryMount);
+    observer.observe(root, { childList: true, subtree: true });
 }
-
 window.addEventListener('pagehide', () => observer?.disconnect());

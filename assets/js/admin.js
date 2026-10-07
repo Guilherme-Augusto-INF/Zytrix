@@ -1,47 +1,33 @@
-import {
-  auth,
-  db,
-  onAuthStateChanged,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  serverTimestamp
-} from './firebase.js';
+import { platformSource, ownPlatform } from './platform-backend.js';
+import { auth, db, onAuthStateChanged, collection, doc, getDoc, getDocs, setDoc, updateDoc, serverTimestamp } from './client.js';
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
-
 header();
 footer();
-
 const root = document.querySelector('#admin-root');
 let currentAdmin = null;
-
 function toMillis(value) {
-  return value?.toMillis?.() || 0;
+    return value?.toMillis?.() || 0;
 }
-
 function formatDate(value) {
-  const millis = toMillis(value);
-  if (!millis) return '—';
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short'
-  }).format(new Date(millis));
+    const millis = toMillis(value);
+    if (!millis)
+        return '—';
+    return new Intl.DateTimeFormat('pt-BR', {
+        dateStyle: 'short',
+        timeStyle: 'short'
+    }).format(new Date(millis));
 }
-
 function moneyFromCents(value) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(Number(value || 0) / 100);
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(Number(value || 0) / 100);
 }
-
 function table(headers, rows) {
-  if (!rows.length) return '<div class="admin-empty">Nenhum registro encontrado.</div>';
-  return `
+    if (!rows.length)
+        return '<div class="admin-empty">Nenhum registro encontrado.</div>';
+    return `
     <div class="admin-table-wrap">
       <table class="admin-table">
         <thead><tr>${headers.map(item => `<th>${escapeHtml(item)}</th>`).join('')}</tr></thead>
@@ -50,157 +36,170 @@ function table(headers, rows) {
     </div>
   `;
 }
-
 async function safeCollection(path) {
-  try {
-    return await getDocs(collection(db, ...path));
-  } catch (error) {
-    console.warn(`Falha ao ler ${path.join('/')}`, error);
-    return null;
-  }
+    try {
+        return await getDocs(collection(db, ...path));
+    }
+    catch (error) {
+        console.warn(`Falha ao ler ${path.join('/')}`, error);
+        return null;
+    }
 }
-
 async function moderationSnapshot(streams) {
-  let messages = 0;
-  const chatPenalties = [];
-  const results = await Promise.all(streams.map(async stream => {
-    const [chat, chatBans] = await Promise.all([
-      safeCollection(['streams', stream.id, 'chat']),
-      safeCollection(['streams', stream.id, 'chatBans'])
-    ]);
-    for (const item of chatBans?.docs || []) {
-      chatPenalties.push({
-        streamId: stream.id,
-        streamTitle: stream.title || stream.id,
-        ...item.data()
-      });
-    }
-    return { messages: chat?.size || 0 };
-  }));
-  for (const result of results) messages += result.messages;
-  return { messages, chatPenalties };
+    return ownPlatform(currentAdmin.uid, 'admin.chat-summary');
+    let messages = 0;
+    const chatPenalties = [];
+    const results = await Promise.all(streams.map(async (stream) => {
+        const [chat, chatBans] = await Promise.all([
+            safeCollection(['streams', stream.id, 'chat']),
+            safeCollection(['streams', stream.id, 'chatBans'])
+        ]);
+        for (const item of chatBans?.docs || []) {
+            chatPenalties.push({
+                streamId: stream.id,
+                streamTitle: stream.title || stream.id,
+                ...item.data()
+            });
+        }
+        return { messages: chat?.size || 0 };
+    }));
+    for (const result of results)
+        messages += result.messages;
+    return { messages, chatPenalties };
 }
-
 function durationToDate(value) {
-  const minutes = Number(value || 0);
-  if (!minutes) return null;
-  return new Date(Date.now() + minutes * 60 * 1000);
+    const minutes = Number(value || 0);
+    if (!minutes)
+        return null;
+    return new Date(Date.now() + minutes * 60 * 1000);
 }
-
 function penaltyStatus(item) {
-  if (item.active !== true) return 'Encerrada';
-  if (item.expiresAt?.toMillis?.() && item.expiresAt.toMillis() <= Date.now()) return 'Expirada';
-  return 'Ativa';
+    if (item.active !== true)
+        return 'Encerrada';
+    if (item.expiresAt?.toMillis?.() && item.expiresAt.toMillis() <= Date.now())
+        return 'Expirada';
+    return 'Ativa';
 }
-
 async function applyPenalty(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const uid = form.querySelector('[name="uid"]').value.trim();
-  const type = form.querySelector('[name="type"]').value;
-  const reason = form.querySelector('[name="reason"]').value.trim();
-  const duration = form.querySelector('[name="duration"]').value;
-  const message = document.querySelector('#moderation-msg');
-  if (!uid || !reason) {
-    message.innerHTML = '<div class="message err">Informe UID e motivo.</div>';
-    return;
-  }
-  try {
-    const ref = doc(db, 'moderationPenalties', uid);
-    const current = await getDoc(ref);
-    const base = {
-      uid,
-      type,
-      reason: reason.slice(0, 500),
-      active: true,
-      expiresAt: durationToDate(duration),
-      updatedAt: serverTimestamp()
-    };
-    if (current.exists()) {
-      await updateDoc(ref, base);
-    } else {
-      await setDoc(ref, {
-        ...base,
-        createdBy: currentAdmin.uid,
-        createdAt: serverTimestamp()
-      });
+    event.preventDefault();
+    const form = event.currentTarget;
+    const uid = form.querySelector('[name="uid"]').value.trim();
+    const type = form.querySelector('[name="type"]').value;
+    const reason = form.querySelector('[name="reason"]').value.trim();
+    const duration = form.querySelector('[name="duration"]').value;
+    const message = document.querySelector('#moderation-msg');
+    if (!uid || !reason) {
+        message.innerHTML = '<div class="message err">Informe UID e motivo.</div>';
+        return;
     }
-    await setDoc(doc(collection(db, 'moderationActions')), {
-      targetUid: uid,
-      type,
-      reason: reason.slice(0, 500),
-      action: 'apply',
-      moderatorUid: currentAdmin.uid,
-      expiresAt: durationToDate(duration),
-      createdAt: serverTimestamp()
-    });
-    message.innerHTML = '<div class="message ok">Penalidade aplicada.</div>';
-    await loadDashboard();
-  } catch (error) {
-    console.error('Falha ao aplicar penalidade:', error);
-    message.innerHTML = '<div class="message err">Não foi possível aplicar a penalidade.</div>';
-  }
+    try {
+        {
+            const date = durationToDate(duration);
+            const minutes = date ? Math.max(1, Math.ceil((date.getTime() - Date.now()) / 60000)) : null;
+            await ownPlatform(currentAdmin.uid, 'admin.penalty', { uid, kind: type, reason: reason.slice(0, 500), minutes, requestKey: crypto.randomUUID() });
+            message.textContent = 'Penalidade aplicada.';
+            await loadDashboard();
+            return;
+        }
+        const ref = doc(db, 'moderationPenalties', uid);
+        const current = await getDoc(ref);
+        const base = {
+            uid,
+            type,
+            reason: reason.slice(0, 500),
+            active: true,
+            expiresAt: durationToDate(duration),
+            updatedAt: serverTimestamp()
+        };
+        if (current.exists()) {
+            await updateDoc(ref, base);
+        }
+        else {
+            await setDoc(ref, {
+                ...base,
+                createdBy: currentAdmin.uid,
+                createdAt: serverTimestamp()
+            });
+        }
+        await setDoc(doc(collection(db, 'moderationActions')), {
+            targetUid: uid,
+            type,
+            reason: reason.slice(0, 500),
+            action: 'apply',
+            moderatorUid: currentAdmin.uid,
+            expiresAt: durationToDate(duration),
+            createdAt: serverTimestamp()
+        });
+        message.innerHTML = '<div class="message ok">Penalidade aplicada.</div>';
+        await loadDashboard();
+    }
+    catch (error) {
+        console.error('Falha ao aplicar penalidade:', error);
+        message.innerHTML = '<div class="message err">Não foi possível aplicar a penalidade.</div>';
+    }
 }
-
 async function revokePenalty(uid) {
-  const reason = window.prompt('Motivo para encerrar a penalidade:', 'Revisão administrativa');
-  if (!reason) return;
-  try {
-    await updateDoc(doc(db, 'moderationPenalties', uid), {
-      active: false,
-      updatedAt: serverTimestamp()
-    });
-    await setDoc(doc(collection(db, 'moderationActions')), {
-      targetUid: uid,
-      type: 'none',
-      reason: reason.slice(0, 500),
-      action: 'revoke',
-      moderatorUid: currentAdmin.uid,
-      expiresAt: null,
-      createdAt: serverTimestamp()
-    });
-    await loadDashboard();
-  } catch (error) {
-    console.error('Falha ao encerrar penalidade:', error);
-    window.alert('Não foi possível encerrar a penalidade.');
-  }
+    const reason = window.prompt('Motivo para encerrar a penalidade:', 'Revisão administrativa');
+    if (!reason)
+        return;
+    try {
+        {
+            await ownPlatform(currentAdmin.uid, 'admin.penalty', { uid, kind: 'revoke', reason: reason.slice(0, 500), requestKey: crypto.randomUUID() });
+            await loadDashboard();
+            return;
+        }
+        await updateDoc(doc(db, 'moderationPenalties', uid), {
+            active: false,
+            updatedAt: serverTimestamp()
+        });
+        await setDoc(doc(collection(db, 'moderationActions')), {
+            targetUid: uid,
+            type: 'none',
+            reason: reason.slice(0, 500),
+            action: 'revoke',
+            moderatorUid: currentAdmin.uid,
+            expiresAt: null,
+            createdAt: serverTimestamp()
+        });
+        await loadDashboard();
+    }
+    catch (error) {
+        console.error('Falha ao encerrar penalidade:', error);
+        window.alert('Não foi possível encerrar a penalidade.');
+    }
 }
-
 async function loadDashboard() {
-  root.innerHTML = '<div class="state">Carregando dados administrativos...</div>';
-
-  const [usersSnap, profilesSnap, channelsSnap, streamsSnap, walletsSnap, ordersSnap, categoriesSnap, penaltiesSnap, actionsSnap] = await Promise.all([
-    safeCollection(['users']),
-    safeCollection(['profiles']),
-    safeCollection(['channels']),
-    safeCollection(['streams']),
-    safeCollection(['wallets']),
-    safeCollection(['zyCoinOrders']),
-    safeCollection(['categories']),
-    safeCollection(['moderationPenalties']),
-    safeCollection(['moderationActions'])
-  ]);
-
-  const users = usersSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
-  const profiles = new Map((profilesSnap?.docs || []).map(item => [item.id, item.data()]));
-  const channels = channelsSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
-  const streams = streamsSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
-  const wallets = walletsSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
-  const orders = ordersSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
-  const categories = categoriesSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
-  const penalties = penaltiesSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
-  const actions = actionsSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
-  const liveStreams = streams.filter(item => item.status === 'live');
-  const moderation = await moderationSnapshot(streams);
-  const totalCoins = wallets.reduce((sum, item) => sum + Number(item.balance || 0), 0);
-  const activePenalties = penalties.filter(item => penaltyStatus(item) === 'Ativa');
-
-  const recentUsers = [...users]
-    .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
-    .slice(0, 12)
-    .map(user => {
-      const profile = profiles.get(user.id) || {};
-      return `
+    root.innerHTML = '<div class="state">Carregando dados administrativos...</div>';
+    const [usersSnap, profilesSnap, channelsSnap, streamsSnap, walletsSnap, ordersSnap, categoriesSnap, penaltiesSnap, actionsSnap] = await Promise.all([
+        safeCollection(['users']),
+        safeCollection(['profiles']),
+        safeCollection(['channels']),
+        safeCollection(['streams']),
+        safeCollection(['wallets']),
+        safeCollection(['zyCoinOrders']),
+        safeCollection(['categories']),
+        safeCollection(['moderationPenalties']),
+        safeCollection(['moderationActions'])
+    ]);
+    const users = usersSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
+    const profiles = new Map((profilesSnap?.docs || []).map(item => [item.id, item.data()]));
+    const channels = channelsSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
+    const streams = streamsSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
+    const wallets = walletsSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
+    const orders = ordersSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
+    const categories = categoriesSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
+    const penalties = penaltiesSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
+    const actions = actionsSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
+    const liveStreams = streams.filter(item => item.status === 'live');
+    const moderation = await moderationSnapshot(streams);
+    const totalCoins = wallets.reduce((sum, item) => sum + Number(item.balance || 0), 0);
+    const activePenalties = penalties.filter(item => penaltyStatus(item) === 'Ativa');
+    const recentUsers = [...users]
+        .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
+        .slice(0, 12)
+        .map(user => {
+        const profile = profiles.get(user.id) || {};
+        return `
         <tr>
           <td>${escapeHtml(profile.username || 'Sem nome')}</td>
           <td>${escapeHtml(user.email || '—')}</td>
@@ -209,15 +208,14 @@ async function loadDashboard() {
         </tr>
       `;
     });
-
-  const streamRows = [...streams]
-    .sort((a, b) => Number(b.status === 'live') - Number(a.status === 'live'))
-    .slice(0, 16)
-    .map(stream => {
-      const profile = profiles.get(stream.streamerUid) || {};
-      const source = parseStreamingSource(stream.playbackURL || '');
-      const platform = source ? streamingPlatformLabel(source.platform) : '—';
-      return `
+    const streamRows = [...streams]
+        .sort((a, b) => Number(b.status === 'live') - Number(a.status === 'live'))
+        .slice(0, 16)
+        .map(stream => {
+        const profile = profiles.get(stream.streamerUid) || {};
+        const source = parseStreamingSource(stream.playbackURL || '');
+        const platform = source ? streamingPlatformLabel(source.platform) : '—';
+        return `
         <tr>
           <td>${escapeHtml(profile.username || stream.streamerUid || '—')}</td>
           <td>${escapeHtml(stream.title || 'Sem título')}</td>
@@ -228,11 +226,10 @@ async function loadDashboard() {
         </tr>
       `;
     });
-
-  const orderRows = [...orders]
-    .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
-    .slice(0, 12)
-    .map(order => `
+    const orderRows = [...orders]
+        .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
+        .slice(0, 12)
+        .map(order => `
       <tr>
         <td>${escapeHtml(order.uid || '—')}</td>
         <td>${escapeHtml(order.packageId || '—')}</td>
@@ -242,10 +239,9 @@ async function loadDashboard() {
         <td class="muted-cell">${formatDate(order.createdAt)}</td>
       </tr>
     `);
-
-  const penaltyRows = [...penalties]
-    .sort((a, b) => toMillis(b.updatedAt) - toMillis(a.updatedAt))
-    .map(item => `
+    const penaltyRows = [...penalties]
+        .sort((a, b) => toMillis(b.updatedAt) - toMillis(a.updatedAt))
+        .map(item => `
       <tr>
         <td>${escapeHtml(profiles.get(item.uid)?.username || item.uid)}</td>
         <td>${escapeHtml(item.type || '—')}</td>
@@ -255,11 +251,10 @@ async function loadDashboard() {
         <td>${item.active === true ? `<button class="btn btn-danger revoke-penalty" data-uid="${escapeAttr(item.uid)}">Encerrar</button>` : '—'}</td>
       </tr>
     `);
-
-  const chatPenaltyRows = [...moderation.chatPenalties]
-    .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
-    .slice(0, 30)
-    .map(item => `
+    const chatPenaltyRows = [...moderation.chatPenalties]
+        .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
+        .slice(0, 30)
+        .map(item => `
       <tr>
         <td>${escapeHtml(profiles.get(item.uid)?.username || item.uid || '—')}</td>
         <td>${escapeHtml(item.reason || '—')}</td>
@@ -267,11 +262,10 @@ async function loadDashboard() {
         <td>${item.expiresAt ? formatDate(item.expiresAt) : 'Permanente'}</td>
       </tr>
     `);
-
-  const actionRows = [...actions]
-    .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
-    .slice(0, 30)
-    .map(item => `
+    const actionRows = [...actions]
+        .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
+        .slice(0, 30)
+        .map(item => `
       <tr>
         <td>${escapeHtml(profiles.get(item.targetUid)?.username || item.targetUid || '—')}</td>
         <td>${escapeHtml(item.action || '—')}</td>
@@ -280,8 +274,7 @@ async function loadDashboard() {
         <td>${formatDate(item.createdAt)}</td>
       </tr>
     `);
-
-  root.innerHTML = `
+    root.innerHTML = `
     <div class="admin-section-head">
       <div>
         <div class="eyebrow">Administração</div>
@@ -350,35 +343,33 @@ async function loadDashboard() {
       </section>
     </div>
   `;
-
-  document.querySelector('#moderation-form')?.addEventListener('submit', applyPenalty);
-  document.querySelectorAll('.revoke-penalty').forEach(button => {
-    button.addEventListener('click', () => revokePenalty(button.dataset.uid));
-  });
+    document.querySelector('#moderation-form')?.addEventListener('submit', applyPenalty);
+    document.querySelectorAll('.revoke-penalty').forEach(button => {
+        button.addEventListener('click', () => revokePenalty(button.dataset.uid));
+    });
 }
-
-onAuthStateChanged(auth, async user => {
-  if (!user) {
-    root.innerHTML = `
+onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+        root.innerHTML = `
       <div class="card panel">
         <h2>Acesso restrito</h2>
         <p class="muted">Entre com uma conta administrativa para continuar.</p>
         <a class="btn btn-primary" href="login.html">Entrar</a>
       </div>
     `;
-    return;
-  }
-
-  try {
-    const adminSnap = await getDoc(doc(db, 'admins', user.uid));
-    if (!adminSnap.exists() || adminSnap.data().active !== true) {
-      root.innerHTML = '<div class="message err">Sua conta não possui acesso administrativo.</div>';
-      return;
+        return;
     }
-    currentAdmin = user;
-    await loadDashboard();
-  } catch (error) {
-    console.error('Falha no painel administrativo:', error);
-    root.innerHTML = '<div class="message err">Não foi possível carregar o painel administrativo.</div>';
-  }
+    try {
+        const adminSnap = await getDoc(doc(db, 'admins', user.uid));
+        if (!adminSnap.exists() || adminSnap.data().active !== true) {
+            root.innerHTML = '<div class="message err">Sua conta não possui acesso administrativo.</div>';
+            return;
+        }
+        currentAdmin = user;
+        await loadDashboard();
+    }
+    catch (error) {
+        console.error('Falha no painel administrativo:', error);
+        root.innerHTML = '<div class="message err">Não foi possível carregar o painel administrativo.</div>';
+    }
 });
