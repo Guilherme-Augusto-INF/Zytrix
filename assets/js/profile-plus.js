@@ -1,51 +1,36 @@
-import {
-  auth,
-  db,
-  onAuthStateChanged,
-  doc,
-  getDoc
-} from './firebase.js';
+import { auth, db, onAuthStateChanged, doc, getDoc } from './client.js';
 import { escapeHtml } from './ui.js';
-import {
-  watchProgress,
-  levelFromXp,
-  achievementList,
-  getPlatformPreferences,
-  savePlatformPreferences,
-  saveCreatorAttribution
-} from './platform-core.js';
-
+import { watchProgress, levelFromXp, achievementList, getPlatformPreferences, savePlatformPreferences, saveCreatorAttribution } from './platform-core.js';
 const root = document.querySelector('#profile-root');
 let user = null;
 let progress = null;
 let prefs = null;
 let stopProgress = null;
 let observer = null;
-
 function levelBadges(level, progressData) {
-  const result = [`<span class="zy-badge">⭐ Nv. ${level.level} · ${escapeHtml(level.label)}</span>`];
-  if (Number(progressData?.streakDays || 0) >= 3) result.push(`<span class="zy-badge">🔥 ${Number(progressData.streakDays)} dias</span>`);
-  if (Number(progressData?.watchMinutes || 0) >= 300) result.push('<span class="zy-badge">🎬 Maratonista</span>');
-  if (level.level >= 5) result.push('<span class="zy-badge">💎 Superfã</span>');
-  return result.join('');
+    const result = [`<span class="zy-badge">⭐ Nv. ${level.level} · ${escapeHtml(level.label)}</span>`];
+    if (Number(progressData?.streakDays || 0) >= 3)
+        result.push(`<span class="zy-badge">🔥 ${Number(progressData.streakDays)} dias</span>`);
+    if (Number(progressData?.watchMinutes || 0) >= 300)
+        result.push('<span class="zy-badge">🎬 Maratonista</span>');
+    if (level.level >= 5)
+        result.push('<span class="zy-badge">💎 Superfã</span>');
+    return result.join('');
 }
-
 function render() {
-  if (!root || !user || !prefs) return;
-
-  let section = root.querySelector('#profile-plus');
-  if (!section) {
-    section = document.createElement('section');
-    section.id = 'profile-plus';
-    section.className = 'profile-plus';
-    root.appendChild(section);
-  }
-
-  const level = levelFromXp(progress?.xp || 0);
-  const achievements = achievementList(progress || {});
-  const unlocked = achievements.filter(item => item.unlocked).length;
-
-  section.innerHTML = `
+    if (!root || !user || !prefs)
+        return;
+    let section = root.querySelector('#profile-plus');
+    if (!section) {
+        section = document.createElement('section');
+        section.id = 'profile-plus';
+        section.className = 'profile-plus';
+        root.appendChild(section);
+    }
+    const level = levelFromXp(progress?.xp || 0);
+    const achievements = achievementList(progress || {});
+    const unlocked = achievements.filter(item => item.unlocked).length;
+    section.innerHTML = `
     <div class="card panel" id="progresso">
       <div class="eyebrow">PROGRESSO</div>
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap">
@@ -81,110 +66,106 @@ function render() {
       <div id="viewer-creator-code-feedback"></div>
     </div>
   `;
-
-  bind();
+    bind();
 }
-
 function feedback(selector, text, error = false) {
-  const el = document.querySelector(selector);
-  if (el) el.innerHTML = `<div class="message ${error ? 'err' : 'ok'}">${escapeHtml(text)}</div>`;
+    const el = document.querySelector(selector);
+    if (el)
+        el.innerHTML = `<div class="message ${error ? 'err' : 'ok'}">${escapeHtml(text)}</div>`;
 }
-
 function bind() {
-  document.querySelector('#save-platform-prefs')?.addEventListener('click', async () => {
-    try {
-      prefs = {
-        hideMatureContent: document.querySelector('#pref-hide-mature').checked,
-        safeMode: document.querySelector('#pref-safe-mode').checked,
-        allowReactions: document.querySelector('#pref-reactions').checked,
-        compactAlerts: document.querySelector('#pref-compact-alerts').checked
-      };
-      await savePlatformPreferences(user.uid, prefs);
-      feedback('#platform-prefs-feedback', 'Preferências salvas.');
-    } catch (error) {
-      console.warn('Falha ao salvar preferências do perfil.', error);
-      feedback('#platform-prefs-feedback', 'Não foi possível salvar.', true);
-    }
-  });
-
-  document.querySelector('#set-viewer-creator-code')?.addEventListener('click', async () => {
-    const code = document.querySelector('#viewer-creator-code').value.trim().toLowerCase();
-    if (!/^[a-z0-9_-]{3,24}$/.test(code)) {
-      feedback('#viewer-creator-code-feedback', 'Código inválido.', true);
-      return;
-    }
-    try {
-      const snap = await getDoc(doc(db, 'creatorCodes', code));
-      if (!snap.exists()) {
-        feedback('#viewer-creator-code-feedback', 'Código de criador não encontrado.', true);
-        return;
-      }
-      if (snap.data().creatorUid === user.uid) {
-        feedback('#viewer-creator-code-feedback', 'Você não pode atribuir sua própria conta.', true);
-        return;
-      }
-      await saveCreatorAttribution(user.uid, code, snap.data().creatorUid);
-      feedback('#viewer-creator-code-feedback', `Código ${code} salvo.`);
-    } catch (error) {
-      console.warn('Falha ao salvar código de criador.', error);
-      feedback('#viewer-creator-code-feedback', 'Não foi possível salvar o código.', true);
-    }
-  });
-
-  document.querySelector('#clear-viewer-creator-code')?.addEventListener('click', async () => {
-    try {
-      await saveCreatorAttribution(user.uid, '', '');
-      const input = document.querySelector('#viewer-creator-code');
-      if (input) input.value = '';
-      feedback('#viewer-creator-code-feedback', 'Atribuição removida.');
-    } catch (error) {
-      console.warn('Falha ao remover código de criador.', error);
-      feedback('#viewer-creator-code-feedback', 'Não foi possível remover a atribuição.', true);
-    }
-  });
+    document.querySelector('#save-platform-prefs')?.addEventListener('click', async () => {
+        try {
+            prefs = {
+                hideMatureContent: document.querySelector('#pref-hide-mature').checked,
+                safeMode: document.querySelector('#pref-safe-mode').checked,
+                allowReactions: document.querySelector('#pref-reactions').checked,
+                compactAlerts: document.querySelector('#pref-compact-alerts').checked
+            };
+            await savePlatformPreferences(user.uid, prefs);
+            feedback('#platform-prefs-feedback', 'Preferências salvas.');
+        }
+        catch (error) {
+            console.warn('Falha ao salvar preferências do perfil.', error);
+            feedback('#platform-prefs-feedback', 'Não foi possível salvar.', true);
+        }
+    });
+    document.querySelector('#set-viewer-creator-code')?.addEventListener('click', async () => {
+        const code = document.querySelector('#viewer-creator-code').value.trim().toLowerCase();
+        if (!/^[a-z0-9_-]{3,24}$/.test(code)) {
+            feedback('#viewer-creator-code-feedback', 'Código inválido.', true);
+            return;
+        }
+        try {
+            const snap = await getDoc(doc(db, 'creatorCodes', code));
+            if (!snap.exists()) {
+                feedback('#viewer-creator-code-feedback', 'Código de criador não encontrado.', true);
+                return;
+            }
+            if (snap.data().creatorUid === user.uid) {
+                feedback('#viewer-creator-code-feedback', 'Você não pode atribuir sua própria conta.', true);
+                return;
+            }
+            await saveCreatorAttribution(user.uid, code, snap.data().creatorUid);
+            feedback('#viewer-creator-code-feedback', `Código ${code} salvo.`);
+        }
+        catch (error) {
+            console.warn('Falha ao salvar código de criador.', error);
+            feedback('#viewer-creator-code-feedback', 'Não foi possível salvar o código.', true);
+        }
+    });
+    document.querySelector('#clear-viewer-creator-code')?.addEventListener('click', async () => {
+        try {
+            await saveCreatorAttribution(user.uid, '', '');
+            const input = document.querySelector('#viewer-creator-code');
+            if (input)
+                input.value = '';
+            feedback('#viewer-creator-code-feedback', 'Atribuição removida.');
+        }
+        catch (error) {
+            console.warn('Falha ao remover código de criador.', error);
+            feedback('#viewer-creator-code-feedback', 'Não foi possível remover a atribuição.', true);
+        }
+    });
 }
-
 function tryMount() {
-  if (!user || !prefs || !root) return;
-  const baseReady = root.querySelector('.profile-grid') || root.querySelector('.info-list');
-  if (!baseReady) return;
-  render();
+    if (!user || !prefs || !root)
+        return;
+    const baseReady = root.querySelector('.profile-grid') || root.querySelector('.info-list');
+    if (!baseReady)
+        return;
+    render();
 }
-
-onAuthStateChanged(auth, async current => {
-  user = current;
-  stopProgress?.();
-  stopProgress = null;
-  if (!user) return;
-
-  prefs = await getPlatformPreferences(user.uid).catch(() => ({
-    hideMatureContent: false,
-    safeMode: false,
-    allowReactions: true,
-    compactAlerts: false
-  }));
-
-  stopProgress = watchProgress(user.uid, value => {
-    progress = value;
+onAuthStateChanged(auth, async (current) => {
+    user = current;
+    stopProgress?.();
+    stopProgress = null;
+    if (!user)
+        return;
+    prefs = await getPlatformPreferences(user.uid).catch(() => ({
+        hideMatureContent: false,
+        safeMode: false,
+        allowReactions: true,
+        compactAlerts: false
+    }));
+    stopProgress = watchProgress(user.uid, value => {
+        progress = value;
+        tryMount();
+    }, error => {
+        console.warn('Progresso do perfil indisponível.', error);
+        tryMount();
+    });
     tryMount();
-  }, error => {
-    console.warn('Progresso do perfil indisponível.', error);
-    tryMount();
-  });
-
-  tryMount();
 });
-
 if (root) {
-  observer = new MutationObserver(() => {
-    if (!root.querySelector('#profile-plus')) {
-      tryMount();
-    }
-  });
-  observer.observe(root, { childList: true, subtree: false });
+    observer = new MutationObserver(() => {
+        if (!root.querySelector('#profile-plus')) {
+            tryMount();
+        }
+    });
+    observer.observe(root, { childList: true, subtree: false });
 }
-
 window.addEventListener('pagehide', () => {
-  stopProgress?.();
-  observer?.disconnect();
+    stopProgress?.();
+    observer?.disconnect();
 });

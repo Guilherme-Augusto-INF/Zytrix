@@ -1,4 +1,6 @@
-import { auth, db, googleProvider, onAuthStateChanged, EmailAuthProvider, reauthenticateWithPopup, reauthenticateWithCredential, deleteUser, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot, updateDoc, query, collection, collectionGroup, where, limit, serverTimestamp, writeBatch } from './firebase.js';
+import { platformSource, ownPlatform } from './platform-backend.js';
+import { recoveryPayload } from './staging-recovery.js';
+import { auth, db, googleProvider, onAuthStateChanged, EmailAuthProvider, reauthenticateWithPopup, reauthenticateWithCredential, deleteUser, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot, updateDoc, query, collection, collectionGroup, where, limit, serverTimestamp, writeBatch } from './client.js';
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
 import { safeImageUrl } from './security.js';
@@ -13,6 +15,7 @@ let channel = null;
 let stream = null;
 let walletUnsubscribe = null;
 let creatingChannel = false;
+let closingAccount = false;
 function dateText(timestamp) {
     try {
         return timestamp?.toDate?.().toLocaleDateString('pt-BR', {
@@ -43,7 +46,20 @@ async function load() {
         getDoc(doc(db, 'wallets', user.uid)),
         getDoc(doc(db, 'channels', user.uid))
     ]);
-    // Older accounts may have lost a profile document during prior migrations.
+    if (!profileSnap.exists()) {
+        root.innerHTML = '<section class="card panel"><h1>Recuperar perfil</h1><p>Escolha um nome público. Seu ID e sua carteira serão preservados.</p><form id="recover-original-profile"><input name="username" class="input" minlength="2" maxlength="30" required><label><input name="confirm" type="checkbox" required> Confirmo a criação do meu perfil.</label><button class="btn btn-primary">Criar perfil</button><p role="status"></p></form></section>';
+        const form = root.querySelector('form');
+        form.onsubmit = async (event) => { event.preventDefault(); try {
+            const fields = new FormData(form);
+            await ownPlatform(user.uid, 'profile.recover', recoveryPayload(fields.get('username'), '', fields.get('confirm') === 'on'));
+            await load();
+        }
+        catch {
+            form.querySelector('[role=status]').textContent = 'Não foi possível recuperar o perfil. Verifique seu e-mail e o nome escolhido.';
+        } };
+        return;
+    }
+
     // Keep channel setup available instead of trapping them on a blank profile.
     profile = profileSnap.exists() ? profileSnap.data() : {
         username: user.displayName || 'Streamer',
@@ -135,8 +151,9 @@ function render() {
       </div>
 
       <div id="edit-area" class="hidden" style="margin-top:18px">
+        <div class="form-group"><label for="edit-display-name">Nome</label><input id="edit-display-name" class="input" maxlength="80" value="${escapeAttr(profile.name || user.displayName || '')}"></div>
         <div class="form-group">
-          <label for="edit-name">Nome</label>
+          <label for="edit-name">Username</label>
           <input
             id="edit-name"
             class="input"
@@ -274,7 +291,7 @@ async function saveProfile() {
         return;
     }
     if (rawPhoto && !photoURL) {
-        message.textContent = 'URL da foto não permitida. Use uma imagem HTTPS de Google, Twitch, Kick, YouTube ou Firebase Storage. Links comuns de páginas ou arquivos privados não funcionam.';
+        message.textContent = 'URL da foto não permitida. Use uma imagem HTTPS de Google, Twitch, Kick, YouTube ou provedores de imagem permitidos. Links comuns de páginas ou arquivos privados não funcionam.';
         return;
     }
     if (bio.length > 500) {
@@ -293,19 +310,18 @@ async function saveProfile() {
             return;
         }
     }
-
     button.disabled = true;
     message.textContent = 'Salvando perfil...';
     try {
         const profileRef = doc(db, 'profiles', user.uid);
-        const data = { photoURL, bio };
+        const data = { photoURL, bio, name:document.querySelector('#edit-display-name').value.trim() };
         if (changedName) {
             data.username = name;
             data.usernameUpdatedAt = serverTimestamp();
         }
         const latestProfile = await getDoc(profileRef);
         if (!latestProfile.exists()) {
-            // Repair an older account with a missing profile document.
+            // Recover a missing profile with a missing profile document.
             await setDoc(profileRef, {
                 uid: user.uid,
                 username: name,
@@ -314,10 +330,10 @@ async function saveProfile() {
                 createdAt: serverTimestamp(),
                 usernameUpdatedAt: serverTimestamp()
             });
-        } else {
+        }
+        else {
             await updateDoc(profileRef, data);
         }
-
         // The homepage obtains its channel metadata independently of profiles.
         // Image and name changes should propagate to existing channels too.
         try {
@@ -325,48 +341,54 @@ async function saveProfile() {
             const channelSnap = await getDoc(channelRef);
             if (channelSnap.exists()) {
                 const channelUpdate = { avatarURL: photoURL };
-                if (changedName) channelUpdate.channelName = name;
+                if (changedName)
+                    channelUpdate.channelName = name;
                 await updateDoc(channelRef, channelUpdate);
             }
-        } catch (syncError) {
+        }
+        catch (syncError) {
             console.warn('Perfil atualizado, mas não foi possível sincronizar a foto do canal.', syncError);
         }
         await load();
         const editArea = document.querySelector('#edit-area');
-        if (editArea) editArea.classList.remove('hidden');
+        if (editArea)
+            editArea.classList.remove('hidden');
         const success = document.querySelector('#profile-msg');
-        if (success) success.innerHTML = '<div class="message ok">Foto e dados de perfil salvos com sucesso.</div>';
-    } catch (error) {
+        if (success)
+            success.innerHTML = '<div class="message ok">Foto e dados de perfil salvos com sucesso.</div>';
+    }
+    catch (error) {
         console.error('Falha ao atualizar perfil:', error);
         message.textContent = error?.code === 'permission-denied'
             ? 'Alteração recusada. Confira o domínio da imagem e, se estiver alterando o nome, respeite o intervalo de 7 dias.'
             : error?.code === 'unavailable'
                 ? 'Sem conexão com o banco. Tente novamente.'
                 : 'Não foi possível atualizar o perfil. Tente novamente.';
-    } finally {
-        if (button.isConnected) button.disabled = false;
+    }
+    finally {
+        if (button.isConnected)
+            button.disabled = false;
     }
 }
-
 async function createStreamer() {
-    if (creatingChannel || !user) return;
+    if (creatingChannel || !user)
+        return;
     const message = document.querySelector('#streamer-msg');
     const input = document.querySelector('#stream-url');
     const button = document.querySelector('#be-streamer');
-    if (!message || !input || !button) return;
-
+    if (!message || !input || !button)
+        return;
     const source = parseStreamingSource(input.value);
     if (!source) {
         message.innerHTML = '<div class="message err">Informe um link válido: canal da Twitch/Kick ou uma live/vídeo do YouTube.</div>';
         input.focus();
         return;
     }
-
     creatingChannel = true;
     button.disabled = true;
     message.textContent = 'Validando sua conta e configurando canal...';
     try {
-        // Firestore stream CREATE requires a verified Firebase ID token. Reload
+
         // both the Auth user and token so newly verified users can continue.
         await user.reload();
         await user.getIdToken(true);
@@ -374,7 +396,6 @@ async function createStreamer() {
             message.innerHTML = '<div class="message err">Verifique seu e-mail antes de criar a transmissão. Depois, clique novamente neste botão.</div>';
             return;
         }
-
         const channelRef = doc(db, 'channels', user.uid);
         const channelSnap = await getDoc(channelRef);
         const existingChannel = channelSnap.exists() ? channelSnap.data() : null;
@@ -386,10 +407,10 @@ async function createStreamer() {
                 existingStream = { id: snap.id, ...snap.data() };
             }
         }
-        if (!existingStream) existingStream = await findStream(user.uid);
+        if (!existingStream)
+            existingStream = await findStream(user.uid);
         const streamId = existingStream?.id || user.uid;
         const batch = writeBatch(db);
-
         if (!existingChannel) {
             // Only create the channel if absent. Never reset a user's followers
             // or channel metadata while repairing an orphan stream.
@@ -404,15 +425,16 @@ async function createStreamer() {
                 currentStreamId: streamId,
                 createdAt: serverTimestamp()
             });
-        } else if (existingChannel.currentStreamId !== streamId) {
+        }
+        else if (existingChannel.currentStreamId !== streamId) {
             batch.update(channelRef, { currentStreamId: streamId });
         }
-
         if (existingStream) {
             batch.update(doc(db, 'streams', streamId), {
                 playbackURL: source.canonicalUrl
             });
-        } else {
+        }
+        else {
             batch.set(doc(db, 'streams', streamId), {
                 streamerUid: user.uid,
                 channelId: user.uid,
@@ -428,7 +450,6 @@ async function createStreamer() {
                 viewerCount: 0
             });
         }
-
         await batch.commit();
         // Verify the persisted state before presenting creation as successful.
         const [savedChannel, savedStream] = await Promise.all([
@@ -441,21 +462,25 @@ async function createStreamer() {
         }
         // The next page loads the persisted channel and stream independently.
         location.href = 'config-live.html';
-    } catch (error) {
+    }
+    catch (error) {
         console.error('Erro ao criar/recuperar canal:', error);
         if (error?.code === 'permission-denied') {
             message.textContent = 'O banco recusou a criação. Verifique seu e-mail e as permissões da conta. Se continuar, informe o suporte.';
-        } else if (error?.code === 'unavailable' || error?.code === 'auth/network-request-failed') {
+        }
+        else if (error?.code === 'unavailable' || error?.code === 'auth/network-request-failed') {
             message.textContent = 'Sem conexão com o servidor. Verifique sua internet e tente novamente.';
-        } else {
+        }
+        else {
             message.textContent = 'Não foi possível criar o canal. Nenhuma nova tentativa será feita automaticamente.';
         }
-    } finally {
+    }
+    finally {
         creatingChannel = false;
-        if (button.isConnected) button.disabled = false;
+        if (button.isConnected)
+            button.disabled = false;
     }
 }
-
 async function reauthenticateForDeletion() {
     const providers = user.providerData.map(item => item.providerId);
     if (providers.includes('google.com')) {
@@ -464,7 +489,8 @@ async function reauthenticateForDeletion() {
     }
     if (providers.includes('password')) {
         const password = window.prompt('Para confirmar a exclusão, digite sua senha atual:');
-        if (!password) throw new Error('Senha não informada.');
+        if (!password)
+            throw new Error('Senha não informada.');
         const credential = EmailAuthProvider.credential(user.email, password);
         await reauthenticateWithCredential(user, credential);
         return;
@@ -502,15 +528,28 @@ async function collectAccountRefs(uid) {
     catch (error) {
         console.warn('Não foi possível limpar todas as mensagens do usuário.', error);
     }
-    refs.push(
-        doc(db, 'channels', uid),
-        doc(db, 'wallets', uid),
-        doc(db, 'profiles', uid),
-        doc(db, 'users', uid)
-    );
+    refs.push(doc(db, 'channels', uid), doc(db, 'wallets', uid), doc(db, 'profiles', uid), doc(db, 'users', uid));
     return refs;
 }
 async function deleteAccount() {
+    {
+        const message = document.querySelector('#delete-account-msg');
+        if (window.prompt('Seu perfil e conteúdo serão removidos. Registros financeiros e de segurança serão preservados. Digite EXCLUIR:') !== 'EXCLUIR')
+            return;
+        try {
+            closingAccount = true;
+            await ownPlatform(user.uid, 'account.delete', { confirmation: 'EXCLUIR', requestKey: crypto.randomUUID() });
+            walletUnsubscribe?.();
+            await (await import('./neon-browser.js')).signOut().catch(() => { });
+            localStorage.removeItem('zytrixSelectedStream');
+            location.href = 'index.html';
+        }
+        catch (error) {
+            closingAccount = false;
+            message.textContent = error.code === 'recent_login_required' ? 'Entre novamente e repita a exclusão nos próximos cinco minutos.' : 'Não foi possível excluir a conta.';
+        }
+        return;
+    }
     const message = document.querySelector('#delete-account-msg');
     const button = document.querySelector('#delete-account');
     const confirmation = window.prompt('Esta ação é permanente. Digite EXCLUIR para confirmar:');
@@ -544,6 +583,8 @@ async function deleteAccount() {
 }
 onAuthStateChanged(auth, async (currentUser) => {
     if (!currentUser) {
+        if (closingAccount)
+            return;
         location.href = 'login.html';
         return;
     }

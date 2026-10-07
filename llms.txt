@@ -33,7 +33,7 @@ A Zytrix organiza transmissões ao vivo e permite que visitantes descubram criad
 
 ## Tecnologias e integrações
 
-A versão web utiliza HTML, CSS e JavaScript, com integrações do ecossistema Firebase e players de Twitch e Kick quando aplicável.
+A versão web utiliza HTML, CSS e JavaScript, com integrações do ecossistema Neon e players de Twitch e Kick quando aplicável.
 
 ## Observação para agentes
 

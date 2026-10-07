@@ -1,4 +1,4 @@
-import { auth, db, onAuthStateChanged, doc, getDoc, getDocs, query, collection, where, limit, updateDoc, serverTimestamp, writeBatch, ensureWallet } from './firebase.js';
+import { auth, db, onAuthStateChanged, doc, getDoc, getDocs, query, collection, where, limit, updateDoc, serverTimestamp, writeBatch, ensureWallet } from './client.js';
 import { header, footer, categories, escapeAttr, escapeHtml } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
 import { safeImageUrl } from './security.js';
@@ -83,7 +83,7 @@ function render() {
               value="${escapeAttr(stream.thumbnailURL || '')}"
               autocomplete="url"
             >
-            <small class="muted">Informe uma URL HTTPS direta de imagem pública de um provedor compatível: Google, YouTube, Twitch, Kick ou Firebase Storage.</small>
+            <small class="muted">Informe uma URL HTTPS direta de imagem pública de um provedor compatível: Google, YouTube, Twitch, Kick ou provedores de imagem permitidos.</small>
           </div>
 
           <div class="form-group">
@@ -141,8 +141,8 @@ function render() {
             <div class="stream-alert-sound-row">
               <select id="support-alert-sound" class="input">
                 ${Object.entries(SUPPORT_ALERT_SOUNDS)
-                  .map(([value, label]) => `<option value="${value}" ${normalizeSupportAlertSound(stream.supportAlertSound || 'coin') === value ? 'selected' : ''}>${escapeHtml(label)}</option>`)
-                  .join('')}
+        .map(([value, label]) => `<option value="${value}" ${normalizeSupportAlertSound(stream.supportAlertSound || 'coin') === value ? 'selected' : ''}>${escapeHtml(label)}</option>`)
+        .join('')}
               </select>
               <button id="preview-support-sound" type="button" class="btn">▶ Testar</button>
             </div>
@@ -210,7 +210,8 @@ function render() {
         const message = document.querySelector('#config-msg');
         const sound = normalizeSupportAlertSound(soundSelect?.value || 'coin');
         if (sound === 'none') {
-            if (message) message.innerHTML = '<div class="message ok">Som de apoio desativado.</div>';
+            if (message)
+                message.innerHTML = '<div class="message ok">Som de apoio desativado.</div>';
             return;
         }
         const unlocked = await unlockSupportAlertAudio();
@@ -231,7 +232,7 @@ function collectForm({ requireSubcategory = false } = {}) {
     const thumbnailURL = safeImageUrl(rawThumbnail);
     if (rawThumbnail && !thumbnailURL) {
         return {
-            error: 'Thumbnail inválida: use uma URL HTTPS direta de imagem pública de Google, YouTube, Twitch, Kick ou Firebase Storage. Links de sites arbitrários não são permitidos.'
+            error: 'Thumbnail inválida: use uma URL HTTPS direta de imagem pública de Google, YouTube, Twitch, Kick ou provedores de imagem permitidos. Links de sites arbitrários não são permitidos.'
         };
     }
     const category = document.querySelector('#category').value;
@@ -283,7 +284,8 @@ async function save() {
         });
         await load();
         const status = document.querySelector('#config-msg');
-        if (status) status.innerHTML = `
+        if (status)
+            status.innerHTML = `
           <div class="message ok">
             Configurações e thumbnail salvas. Plataforma: ${streamingPlatformLabel(form.source.platform)}.
           </div>

@@ -27,7 +27,7 @@
   <div data-header="">
   </div>
   <main class="auth-shell">
-   <form class="card auth-card" data-auth-form="" data-mode="register">
+   <form method="post" class="card auth-card" data-auth-form="" data-mode="register">
     <div class="brand" style="justify-content:center">
      <span class="brand-mark">
       Z
@@ -57,10 +57,10 @@
      </label>
      <input class="input" minlength="6" id="register-password" name="password" required="" type="password"/>
     </div>
-    <button class="btn btn-purple" style="width:100%">
+    <button data-auth-pending disabled class="btn btn-purple" style="width:100%">
      Criar conta
     </button>
-    <button class="btn" id="google-login" style="width:100%;margin-top:12px" type="button">
+    <button data-auth-pending disabled class="btn" id="google-login" style="width:100%;margin-top:12px" type="button">
      Entrar com Google
     </button>
     <p class="muted" style="text-align:center">

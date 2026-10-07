@@ -1,20 +1,4 @@
-// Start the public catalogue request independently of the Firebase SDK graph.
-// The same-origin endpoint caches only the anonymous public query for 5 seconds.
-export const initialLives = fetch('/api/home-lives', {
-  credentials: 'same-origin'
-}).then(async response => {
-  if (!response.ok) return null;
-  const rows = await response.json();
-  if (!Array.isArray(rows)) return null;
-  const lives = rows.filter(row => row.document).map(({ document }) => ({
-    id: document.name.split('/').pop(),
-    ...Object.fromEntries(Object.entries(document.fields || {}).map(([key, value]) => [key,
-      value.stringValue ?? value.booleanValue ?? value.integerValue ?? value.doubleValue ?? null
-    ]))
-  }));
-  showPublicPreviews(lives);
-  return lives;
-}).catch(() => null);
+export const initialLives=fetch('/api/home-lives',{credentials:'same-origin'}).then(async r=>{if(!r.ok)return null;const data=await r.json();if(!Array.isArray(data.lives))return null;showPublicPreviews(data.lives);return data.lives;}).catch(()=>null);
 
 function showPublicPreviews(lives) {
   if (typeof document === 'undefined') return;
