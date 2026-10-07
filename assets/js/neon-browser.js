@@ -125,7 +125,7 @@ export async function refreshSession() {
         if (changed)
             notify();
         return candidate;
-    })().catch(error => { if (version === generation) {
+    })().catch(error => { console.warn('Neon session refresh failed:', error.code ?? error.message); if (version === generation) {
         auth.currentUser = null;
         notify();
     } throw error; }).finally(() => { refreshPromise = null; });

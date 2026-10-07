@@ -7,10 +7,12 @@ const url=(await readFile(process.env.NEON_TEST_ADMIN_FILE,'utf8')).trim();
 const parsed=new URL(url); parsed.search='';
 const admin=new pg.Client({connectionString:parsed.href,ssl:{rejectUnauthorized:true}});await admin.connect();
 const origin='http://127.0.0.1:5502',base=process.env.NEON_TEST_APP_URL||origin;
+let previewCookie='';
+if(process.env.NEON_TEST_ACCESS_URL_FILE){let current=(await readFile(process.env.NEON_TEST_ACCESS_URL_FILE,'utf8')).trim();const jar=new Map();for(let i=0;i<4;i++){if(new URL(current).origin!==base)throw Error('unexpected_preview_access_origin');const r=await fetch(current,{redirect:'manual',headers:{Cookie:[...jar].map(([k,v])=>k+'='+v).join('; ')}});for(const c of r.headers.getSetCookie()){const [k,...v]=c.split(';')[0].split('=');jar.set(k,v.join('='));}if(r.status<300||r.status>=400)break;current=new URL(r.headers.get('location'),current).href;}previewCookie=[...jar].map(([k,v])=>k+'='+v).join('; ');}
 const fixture='fixture-'+randomUUID(),password='Test-'+randomUUID()+'9',email=fixture+'@example.invalid';
 let uid; const cookies=new Map();let jwt,session;
 async function auth(path,body){const r=await fetch(AUTH_URL+'/'+path,{method:body?'POST':'GET',headers:{Origin:origin,'Content-Type':'application/json',Cookie:[...cookies].map(([k,v])=>k+'='+v).join('; ')},...(body?{body:JSON.stringify(body)}:{})});for(const c of r.headers.getSetCookie()){const [k,...v]=c.split(';')[0].split('=');cookies.set(k,v.join('='));}return {status:r.status,value:await r.json()};}
-async function api(action,data={},credential=true){const r=await fetch(base+'/api/v1/platform',{method:'POST',headers:{'Content-Type':'application/json',...(credential?{Authorization:'Bearer '+jwt,'X-Neon-Session':session}:{})},body:JSON.stringify({action,data})});return {status:r.status,value:await r.json()};}
+async function api(action,data={},credential=true){const r=await fetch(base+'/api/v1/platform',{method:'POST',headers:{'Content-Type':'application/json',...(previewCookie?{Cookie:previewCookie}:{}),...(credential?{Authorization:'Bearer '+jwt,'X-Neon-Session':session}:{})},body:JSON.stringify({action,data})});return {status:r.status,value:await r.json()};}
 try{
  const signup=await auth('sign-up/email',{email,password,name:'Disposable test'});assert.equal(signup.status,200,JSON.stringify(signup.value));uid=signup.value.user.id;
  const counts=(await admin.query('select (select count(*) from public.profiles where user_id=$1) profiles,(select count(*) from public.wallets where user_id=$1) wallets',[uid])).rows[0];assert.equal(Number(counts.profiles),1);assert.equal(Number(counts.wallets),1);console.log('PASS: signup provisions profile and wallet using Auth UUID');
