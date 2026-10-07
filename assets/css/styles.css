@@ -151,8 +151,14 @@ select:focus-visible {
 }
 
 .btn-purple {
-  border-color: var(--purple);
-  background: var(--purple);
+  border-color: #7c3aed;
+  background: #7c3aed;
+}
+
+.auth-card p a,
+.auth-card .form-actions a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .main {

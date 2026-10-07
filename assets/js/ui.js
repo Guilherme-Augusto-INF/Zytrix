@@ -1,3 +1,4 @@
+import { headerMarkup, footerMarkup } from './site-shell.js';
 import { auth, onAuthStateChanged } from './client.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
 export function header(active = '') {
@@ -5,34 +6,7 @@ export function header(active = '') {
     if (!element)
         return;
     if (!element.querySelector('.site-header'))
-        element.innerHTML = `
-    <header class="site-header">
-      <div class="container nav">
-        <a class="brand" href="index.html" aria-label="Zytrix - Início">
-          <span class="brand-mark">Z</span>
-          <span>Zytrix</span>
-        </a>
-
-        <nav class="nav-links" aria-label="Navegação principal">
-          <a class="${active === 'inicio' ? 'active' : ''}" href="index.html">Início</a>
-          <a class="${active === 'categorias' ? 'active' : ''}" href="categorias.html">Categorias</a>
-          <a class="${active === 'ao-vivo' ? 'active' : ''}" href="ao-vivo.html">Ao Vivo</a>
-          <a class="${active === 'sobre' ? 'active' : ''}" href="sobre.html">Sobre</a>
-        </nav>
-
-        <div class="nav-actions">
-          <a class="icon-link" title="Zy Coins" aria-label="Abrir loja de Zy Coins" href="loja.html">◈</a>
-
-          <div id="guest-nav" class="guest-nav">
-            <a class="btn btn-ghost" href="login.html">Entrar</a>
-            <a class="btn btn-primary" href="registro.html">Registrar</a>
-          </div>
-
-          <a id="profile-nav" class="btn btn-primary hidden" href="perfil.html">Perfil</a>
-        </div>
-      </div>
-    </header>
-  `;
+        element.innerHTML = headerMarkup(active);
     onAuthStateChanged(auth, user => {
         const guest = document.querySelector('#guest-nav');
         const profile = document.querySelector('#profile-nav');
@@ -63,37 +37,8 @@ export function footer() {
     if (!element)
         return;
     ensureFooterStyles();
-    element.innerHTML = `
-    <footer class="site-footer site-footer-v2">
-      <div class="container footer-shell">
-        <div class="footer-top">
-          <a class="brand footer-brand" href="index.html" aria-label="Zytrix - Início">
-            <span class="brand-mark">Z</span>
-            <span>Zytrix</span>
-          </a>
-
-          <nav class="footer-links" aria-label="Links institucionais">
-            <a href="recursos.html">Recursos</a>
-            <a href="faq.html">FAQ</a>
-            <a href="sobre.html">Sobre</a>
-          </nav>
-        </div>
-
-        <div class="footer-bottom">
-          <span class="footer-copy">© 2026 Zytrix. Todos os direitos reservados.</span>
-
-          <nav class="governance-links" aria-label="Políticas e segurança">
-            <a href="/termos">Termos</a>
-            <a href="/privacidade">Privacidade</a>
-            <a href="/diretrizes-da-comunidade">Diretrizes da Comunidade</a>
-            <a href="/denuncias-e-moderacao">Denúncias e Moderação</a>
-            <a href="/conteudo-proibido">Conteúdo Proibido</a>
-            <a href="/politicas">Central de políticas</a>
-          </nav>
-        </div>
-      </div>
-    </footer>
-  `;
+    if (!element.querySelector('.site-footer-v2'))
+        element.innerHTML = footerMarkup();
 }
 export function liveCard(live, options = {}) {
     const source = parseStreamingSource(live.playbackURL || '');
