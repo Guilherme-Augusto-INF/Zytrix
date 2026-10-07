@@ -2,4 +2,3 @@ import pg from 'pg';let pool;
 export function platformEnabled(){return Boolean(process.env.DATABASE_URL&&process.env.ZYTRIX_NEON_AUTH_URL);}
 export function runtimeConnection(value){const url=new URL(value);if(url.protocol!=='postgresql:'||decodeURIComponent(url.username)!=='zytrix_runtime'||!url.hostname.endsWith('.neon.tech')||url.pathname!=='/neondb'||!['require','verify-full'].includes(url.searchParams.get('sslmode')))throw Error('runtime_configuration_invalid');for(const name of url.searchParams.keys())if(!['sslmode','channel_binding'].includes(name))throw Error('runtime_configuration_invalid');url.search='';return url.toString();}
 export function platformPool(){if(!platformEnabled())throw Error('database_not_configured');return pool??=new pg.Pool({connectionString:runtimeConnection(process.env.DATABASE_URL),ssl:{rejectUnauthorized:true},max:5,connectionTimeoutMillis:5000,statement_timeout:10000,query_timeout:12000,idleTimeoutMillis:10000});}
-

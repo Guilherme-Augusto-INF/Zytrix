@@ -29,7 +29,11 @@ export function initNeonAuthPage(form,show){
    if(mode==='reset'){const token=params.get('token');if(token){step='password';if(!strongPassword(password))throw Error('invalid_signup');await authRequest('reset-password',{token,newPassword:password});show('Senha atualizada. Voltando ao login.','ok');setTimeout(()=>location.assign('login.html'),1200);}else{await resetSender.request({email});show('Se existir uma conta elegível, enviaremos as instruções de recuperação.','ok');}}
   }catch(error){if(mode==='login'&&error.code==='EMAIL_NOT_VERIFIED')await finish({email,emailVerified:false});show(error.message==='invalid_signup'?'Use um username válido e senha com 10 caracteres, letra e número.':neonAuthMessage(error,step));}finally{submitting=false;if(button)button.disabled=false;if(form.elements.password)form.elements.password.value='';}
  });
- if(mode==='reset'&&params.has('token')){form.elements.email.required=false;form.elements.email.closest('.form-group')?.setAttribute('hidden','');const input=document.createElement('input');Object.assign(input,{name:'password',type:'password',className:'input',autocomplete:'new-password',required:true,placeholder:'Nova senha'});form.prepend(input);}
+ if(mode==='reset'&&params.has('token')){
+  form.elements.email.required=false;form.elements.email.closest('.form-group')?.remove();form.querySelector('h2').textContent='Redefinir senha';form.querySelector('p.muted').textContent='Escolha uma nova senha com pelo menos 10 caracteres, letra e número.';
+  const group=document.createElement('div');group.className='form-group';group.innerHTML='<label for="new-password">Nova senha</label><input id="new-password" name="password" type="password" class="input" autocomplete="new-password" minlength="10" maxlength="128" required>';
+  form.querySelector('button').before(group);form.querySelector('button').textContent='Salvar nova senha';
+ }
  document.querySelector('#google-login')?.addEventListener('click',async e=>{const button=e.currentTarget;button.disabled=true;try{await signInWithPopup();}catch(error){if(error.message!=='oauth_redirect')show(neonAuthMessage(error,'google'));}finally{button.disabled=false;}});
  if(params.has('error'))show(neonAuthMessage({code:params.get('error')},mode==='reset'?'password':'google'));
  onAuthStateChanged(auth,user=>{if(mode!=='reset')void finish(user).catch(error=>show(neonAuthMessage(error)));});

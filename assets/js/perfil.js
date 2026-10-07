@@ -115,6 +115,10 @@ function render() {
         <div class="info-list">
           <div class="info-row">
             <strong>Nome</strong>
+            <span>${escapeHtml(profile.name || user.displayName || '')}</span>
+          </div>
+          <div class="info-row">
+            <strong>Username</strong>
             <span>${escapeHtml(profile.username || '')}</span>
           </div>
 

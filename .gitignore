@@ -7,3 +7,4 @@ assets/js/neon-managed-client.js.LEGAL.txt
 private_exports/
 *.connection
 *.url
+public/
