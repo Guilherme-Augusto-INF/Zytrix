@@ -1,5 +1,6 @@
+import { filterMarkup } from './discovery-markup.js';
 import { db, collection, query, where, onSnapshot, getProfile, selectStream, normalize, mainCategory } from './client.js';
-import { header, footer, liveCard, icons } from './ui.js';
+import { header, footer, liveCard } from './ui.js';
 import { watchPublicLiveFeed } from './live-feed-source.js';
 header('ao-vivo');
 footer();
@@ -8,8 +9,7 @@ let filter = 'todos';
 let search = '';
 const grid = document.querySelector('#lives-grid');
 const filters = document.querySelector('#filters');
-const names = ['todos', 'Gaming', 'Música', 'Just Chatting', 'Criatividade', 'Esportes', 'Tecnologia', 'Podcasts', 'IRL'];
-filters.innerHTML = names.map(n => `<button class="filter ${n === 'todos' ? 'active' : ''}" data-filter="${n}">${n === 'todos' ? 'Todos' : icons[n] + ' ' + n}</button>`).join('');
+if (!filters.childElementCount) filters.innerHTML = filterMarkup();
 filters.addEventListener('click', event => {
     const button = event.target.closest('[data-filter]');
     if (!button)

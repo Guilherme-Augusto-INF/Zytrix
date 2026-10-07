@@ -3,6 +3,7 @@ import {readFile,stat} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {resolve,extname} from 'node:path';
 import { resolveSafePreviewPath } from './staging-static-path.mjs';
+import { renderStaticLayout } from './static-layout.mjs';
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 if(process.env.ZYTRIX_DATABASE_URL_FILE)process.env.DATABASE_URL=(await readFile(process.env.ZYTRIX_DATABASE_URL_FILE,'utf8')).trim();
 process.env.ZYTRIX_NEON_AUTH_URL??=(await import('../server/neon/neon-token.mjs')).AUTH_URL;
@@ -24,6 +25,7 @@ http.createServer(async(req,res)=>{
   // Resolve and validate the *decoded* path against an explicit assets-only root.
   const file=resolveSafePreviewPath(root,pathname);
   if(!file||!mime[extname(file)]||!(await stat(file)).isFile()){res.writeHead(404);res.end();return;}
-  res.setHeader('Content-Type',mime[extname(file)]);res.end(await readFile(file));
+  const content=await readFile(file);
+  res.setHeader('Content-Type',mime[extname(file)]);res.end(extname(file)==='.html'?renderStaticLayout(content.toString('utf8'),file.split(/[\\/]/).pop()):content);
  }catch{res.writeHead(503);res.end('Temporarily unavailable');}
 }).listen(5502,'127.0.0.1',()=>console.log('Staging validation: http://127.0.0.1:5502'));
