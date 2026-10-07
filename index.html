@@ -14,6 +14,8 @@
   <link rel="manifest" href="/site.webmanifest">
   <link rel="stylesheet" href="assets/css/styles.css">
   <link rel="stylesheet" href="assets/css/features.css">
+  <link rel="stylesheet" href="assets/css/platform.css" data-zytrix-platform-style="true">
+  <link rel="stylesheet" href="assets/css/footer.css" data-zytrix-footer-style="true">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="shortcut icon" href="/favicon.svg" type="image/svg+xml">
   <meta property="og:locale" content="pt_BR">
@@ -87,9 +89,36 @@
   </script>
   <link rel="stylesheet" href="/assets/css/policies.css">
 </head>
-<body>
+<body class="home-page">
   <!-- deploy: account deletion + admin penalties -->
-  <div data-header></div>
+  <div data-header>
+    <header class="site-header">
+      <div class="container nav">
+        <a class="brand" href="index.html" aria-label="Zytrix - Início">
+          <span class="brand-mark">Z</span>
+          <span>Zytrix</span>
+        </a>
+
+        <nav class="nav-links" aria-label="Navegação principal">
+          <a class="active" href="index.html">Início</a>
+          <a class="" href="categorias.html">Categorias</a>
+          <a class="" href="ao-vivo.html">Ao Vivo</a>
+          <a href="explorar.html" data-platform-nav="explore">Explorar</a><a href="clips.html" data-platform-nav="clips">Clipes</a><a href="sobre.html">Sobre</a>
+        </nav>
+
+        <div class="nav-actions">
+          <a class="icon-link" title="Zy Coins" aria-label="Abrir loja de Zy Coins" href="loja.html">◈</a>
+
+          <div id="guest-nav" class="guest-nav">
+            <a class="btn btn-ghost" href="login.html">Entrar</a>
+            <a class="btn btn-primary" href="registro.html">Registrar</a>
+          </div>
+
+          <a id="profile-nav" class="btn btn-primary hidden" href="perfil.html">Perfil</a>
+        </div>
+      </div>
+    </header>
+  </div>
   <main class="main">
     <div class="container">
       <section class="hero">
@@ -101,12 +130,14 @@
         </div>
       </section>
 
+
+
       <section class="section">
         <div class="section-head">
           <h2>Destaques</h2>
           <a class="muted" href="ao-vivo.html">Ver todas →</a>
         </div>
-        <div class="grid grid-3" id="featured"><div class="state">Carregando...</div></div>
+        <div class="grid grid-3" id="featured" aria-busy="true"><div class="card home-live-slot" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div><div class="card home-live-slot" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div><div class="card home-live-slot" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div><div class="state home-live-state" role="status">Carregando...</div></div>
       </section>
 
       <section class="section">
@@ -114,7 +145,7 @@
           <div><div class="eyebrow">Explore</div><h2>Encontre conteúdo por categoria</h2></div>
           <a class="muted" href="categorias.html">Ver categorias →</a>
         </div>
-        <div class="grid grid-4" id="home-categories"></div>
+        <div class="grid grid-4" id="home-categories"><a class="card category-card" href="categoria.html?categoria=Gaming"><span class="category-icon">🎮</span><div><strong>Gaming</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a><a class="card category-card" href="categoria.html?categoria=M%C3%BAsica"><span class="category-icon">🎵</span><div><strong>Música</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a><a class="card category-card" href="categoria.html?categoria=Just%20Chatting"><span class="category-icon">🎙️</span><div><strong>Just Chatting</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a><a class="card category-card" href="categoria.html?categoria=Criatividade"><span class="category-icon">🎨</span><div><strong>Criatividade</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a><a class="card category-card" href="categoria.html?categoria=Esportes"><span class="category-icon">⚽</span><div><strong>Esportes</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a><a class="card category-card" href="categoria.html?categoria=Tecnologia"><span class="category-icon">💻</span><div><strong>Tecnologia</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a><a class="card category-card" href="categoria.html?categoria=Podcasts"><span class="category-icon">🎧</span><div><strong>Podcasts</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a><a class="card category-card" href="categoria.html?categoria=IRL"><span class="category-icon">📹</span><div><strong>IRL</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a></div>
       </section>
 
       <section class="section">
@@ -122,7 +153,7 @@
           <div><div class="eyebrow">Agora</div><h2>Ao vivo na Zytrix</h2></div>
           <a class="btn" href="ao-vivo.html">Explorar lives</a>
         </div>
-        <div class="grid grid-4" id="live-now"><div class="state">Carregando...</div></div>
+        <div class="grid grid-4" id="live-now" aria-busy="true"><div class="card home-live-slot" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div><div class="card home-live-slot" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div><div class="card home-live-slot" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div><div class="card home-live-slot" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div><div class="state home-live-state" role="status">Carregando...</div></div>
       </section>
 
       <section class="section">
@@ -131,6 +162,7 @@
           <div class="card panel"><h2>Conheça a Zytrix</h2><p class="muted">Saiba mais sobre a plataforma, como ela funciona e como Twitch, Kick e Firebase fazem parte da experiência.</p><a href="sobre.html">Sobre a Zytrix →</a></div>
         </div>
       </section>
+      <section class="section" id="personalized-home"><div class="card panel"><div class="eyebrow">PERSONALIZAÇÃO</div><h2>Uma Home que aprende com suas escolhas</h2><p class="muted">Entre na sua conta para priorizar canais seguidos, categorias favoritas e conteúdos recentes.</p><a class="btn btn-primary" href="login.html">Entrar</a></div></section>
     </div>
   </main>
   <div data-footer><footer class="site-footer container"><nav class="governance-links" aria-label="Políticas e segurança"><a href="/termos">Termos</a><a href="/privacidade">Privacidade</a><a href="/diretrizes-da-comunidade">Diretrizes da Comunidade</a><a href="/denuncias-e-moderacao">Denúncias e Moderação</a><a href="/conteudo-proibido">Conteúdo Proibido</a><a href="/politicas">Central de políticas</a></nav></footer></div>

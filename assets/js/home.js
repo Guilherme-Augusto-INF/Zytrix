@@ -33,16 +33,16 @@ let lives = [];
 let stopLive = null;
 let stopCategories = null;
 
-cats.innerHTML = Object.keys(categories).map(c => `<a class="card category-card" href="categoria.html?categoria=${encodeURIComponent(c)}"><span class="category-icon">${icons[c]}</span><div><strong>${c}</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a>`).join('');
+if (!cats.children.length) cats.innerHTML = Object.keys(categories).map(c => `<a class="card category-card" href="categoria.html?categoria=${encodeURIComponent(c)}"><span class="category-icon">${icons[c]}</span><div><strong>${c}</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a>`).join('');
 
 function ensurePersonalizedSection() {
   let section = document.querySelector('#personalized-home');
   if (section) return section;
-  const hero = document.querySelector('.hero');
+  const container = document.querySelector('main .container');
   section = document.createElement('section');
   section.id = 'personalized-home';
   section.className = 'section';
-  hero?.parentElement?.insertBefore(section, hero.nextElementSibling);
+  container?.appendChild(section);
   return section;
 }
 
@@ -85,15 +85,12 @@ function renderLives() {
   const recommended = [...visible].sort((a,b) => score(b) - score(a));
   const trending = [...visible].sort((a,b) => Number(b.viewerCount || 0) - Number(a.viewerCount || 0));
 
-  featured.innerHTML = recommended.slice(0,3).length
-    ? recommended.slice(0,3).map(liveCard).join('')
-    : '<div class="state">Nenhuma live em destaque.</div>';
-  liveNow.innerHTML = trending.slice(0,4).length
-    ? trending.slice(0,4).map(liveCard).join('')
-    : '<div class="state">Nenhuma live agora.</div>';
+  renderGrid(featured, recommended.slice(0,3), 3, 'Nenhuma live em destaque.');
+  renderGrid(liveNow, trending.slice(0,4), 4, 'Nenhuma live agora.');
 
   const personal = ensurePersonalizedSection();
   if (user) {
+    personal.dataset.user = user.uid;
     const followedLives = recommended.filter(item => following.has(item.streamerUid)).slice(0,4);
     const recentLives = recommended.filter(item => recentStreamers.has(item.streamerUid) && !following.has(item.streamerUid)).slice(0,4);
     personal.innerHTML = `
@@ -102,10 +99,18 @@ function renderLives() {
       ${recentLives.length ? `<h3 style="margin-top:18px">Continuar explorando</h3><div class="grid grid-4">${recentLives.map(liveCard).join('')}</div>` : ''}
       ${!followedLives.length && !recentLives.length ? '<div class="card panel"><strong>Personalize sua Home</strong><p class="muted">Siga streamers e categorias para a Zytrix ordenar melhor suas recomendações.</p><a class="btn" href="explorar.html">Explorar agora</a></div>' : ''}
     `;
-  } else {
+  } else if (personal.dataset.user) {
+    delete personal.dataset.user;
     personal.innerHTML = `<div class="card panel"><div class="eyebrow">PERSONALIZAÇÃO</div><h2>Uma Home que aprende com suas escolhas</h2><p class="muted">Entre na sua conta para priorizar canais seguidos, categorias favoritas e conteúdos recentes.</p><a class="btn btn-primary" href="login.html">Entrar</a></div>`;
   }
   bindCards();
+}
+
+function renderGrid(element, items, count, message) {
+  const slot = '<div class="card home-live-slot" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div>';
+  element.innerHTML = items.map(liveCard).join('') + slot.repeat(count - items.length)
+    + (!items.length ? `<div class="state home-live-state" role="status">${escapeHtml(message)}</div>` : '');
+  element.setAttribute('aria-busy', 'false');
 }
 
 function bindCards() {
@@ -126,7 +131,10 @@ function startLives() {
       return { ...item, username: p?.username || 'Streamer', photoURL: p?.photoURL || '' };
     }));
     renderLives();
-  }, () => { featured.innerHTML = '<div class="state">Não foi possível carregar as lives.</div>'; });
+  }, () => {
+    renderGrid(featured, [], 3, 'Não foi possível carregar as lives.');
+    renderGrid(liveNow, [], 4, 'Não foi possível carregar as lives.');
+  });
 }
 
 onAuthStateChanged(auth, async current => {
