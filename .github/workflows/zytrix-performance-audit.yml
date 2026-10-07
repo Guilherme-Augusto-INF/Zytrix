@@ -9,6 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 665bc593369318512a68ce264e2218b090c32bd7
+      - name: Verify source and build
+        run: |
+          npm test
+          npm run check
+          npm run build
       - name: Prepare Chromium and Lighthouse
         run: |
           node --version
@@ -33,9 +41,20 @@ jobs:
           for (const [id,c] of Object.entries(r.categories)) metrics[id]=Math.round(c.score*100);
           for (const id of ['first-contentful-paint','largest-contentful-paint','total-blocking-time','cumulative-layout-shift','speed-index']) metrics[id]=r.audits[id].numericValue;
           console.log('ZYTRIX_METRICS '+JSON.stringify(metrics));
-          for(const [id,a] of Object.entries(r.audits)) if(a.score!==null && a.score<1 && ['layout-shifts','lcp-breakdown-insight','lcp-discovery-insight','errors-in-console','image-delivery-insight','network-dependency-tree-insight'].includes(id)) console.log('ZYTRIX_AUDIT '+JSON.stringify({id,title:a.title,details:a.details}));
+          const requests=r.audits['network-requests'].details.items.filter(x=>x.url.includes('/api/home-lives'));
+          console.log('ZYTRIX_CATALOGUE '+JSON.stringify(requests.map(x=>({url:x.url,status:x.statusCode,start:x.networkRequestTime,end:x.networkEndTime,transfer:x.transferSize}))));
+          for(const id of ['lcp-breakdown-insight','lcp-discovery-insight','errors-in-console']) {const a=r.audits[id];if(a)console.log('ZYTRIX_AUDIT '+JSON.stringify({id,score:a.score,details:a.details}));}
           NODE
           done
+      - name: Try official PageSpeed API
+        continue-on-error: true
+        run: |
+          curl --max-time 180 --silent 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https%3A%2F%2Fzytrix-lives.vercel.app%2F&strategy=mobile&category=performance&category=accessibility&category=best-practices&category=seo' > pagespeed-mobile.json
+          node <<'NODE'
+          const fs=require('fs');const r=JSON.parse(fs.readFileSync('pagespeed-mobile.json'));
+          if(r.error)console.log('ZYTRIX_PAGESPEED_API '+JSON.stringify(r.error));
+          else {const l=r.lighthouseResult;console.log('ZYTRIX_PAGESPEED_API '+JSON.stringify({categories:Object.fromEntries(Object.entries(l.categories).map(([k,v])=>[k,v.score*100])),LCP:l.audits['largest-contentful-paint'].numericValue,CLS:l.audits['cumulative-layout-shift'].numericValue,TBT:l.audits['total-blocking-time'].numericValue}));}
+          NODE
       - name: Save full reports
         if: always()
         uses: actions/upload-artifact@v4
