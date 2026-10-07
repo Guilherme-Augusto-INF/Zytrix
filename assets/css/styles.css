@@ -1297,3 +1297,16 @@ select:focus-visible {
     padding: 18px;
   }
 }
+
+/* Home grids keep the same geometry while live data and images arrive. */
+.home-page #featured,
+.home-page #live-now { position: relative; }
+.home-page .home-live-slot { visibility: hidden; overflow: hidden; }
+.home-page .live-meta { height: 62px; min-width: 0; }
+.home-page .live-meta > div { min-width: 0; }
+.home-page .live-title,
+.home-page .live-sub,
+.home-page .live-cat { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-page .thumb > .state { position: absolute; inset: 0; min-height: 0; }
+.home-page .thumb img { display: block; }
+.home-page .home-live-state { position: absolute; inset: 0; min-height: 0; align-content: start; padding-top: 32px; pointer-events: none; }

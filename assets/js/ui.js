@@ -5,7 +5,7 @@ export function header(active = '') {
     const element = document.querySelector('[data-header]');
     if (!element) return;
 
-    element.innerHTML = `
+    if (!element.querySelector('.site-header')) element.innerHTML = `
     <header class="site-header">
       <div class="container nav">
         <a class="brand" href="index.html" aria-label="Zytrix - Início">
@@ -107,7 +107,7 @@ export function liveCard(live) {
     <article class="card live-card" data-live-id="${escapeAttr(live.id)}">
       <div class="thumb">
         ${live.thumbnailURL
-        ? `<img src="${escapeAttr(live.thumbnailURL)}" alt="Thumbnail de ${escapeAttr(live.username || 'streamer')}">`
+        ? `<img width="640" height="360" src="${escapeAttr(live.thumbnailURL)}" alt="Thumbnail de ${escapeAttr(live.username || 'streamer')}">`
         : '<div class="state">ZYTRIX</div>'}
 
         <span class="badge">● AO VIVO</span>
@@ -122,7 +122,7 @@ export function liveCard(live) {
 
       <div class="live-meta">
         ${live.photoURL
-        ? `<img class="avatar" src="${escapeAttr(live.photoURL)}" alt="Foto de ${escapeAttr(live.username || 'streamer')}">`
+        ? `<img width="34" height="34" class="avatar" src="${escapeAttr(live.photoURL)}" alt="Foto de ${escapeAttr(live.username || 'streamer')}">`
         : `<span class="avatar">${escapeHtml(initial)}</span>`}
 
         <div>
