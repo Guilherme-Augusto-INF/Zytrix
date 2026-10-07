@@ -10,7 +10,7 @@ import {
   getProfile,
   selectStream
 } from './firebase.js';
-import { header, footer, liveCard, categories, icons, escapeHtml } from './ui.js';
+import { header, footer, liveCard, liveMeta, categories, icons, escapeHtml } from './ui.js';
 import {
   getPlatformPreferences,
   watchFollowedCategories,
@@ -33,6 +33,9 @@ let lives = [];
 let livesReady = false;
 let stopLive = null;
 let stopCategories = null;
+let liveGeneration = 0;
+const profiles = new Map();
+const pendingProfiles = new Map();
 
 if (!cats.children.length) cats.innerHTML = Object.keys(categories).map(c => `<a class="card category-card" href="categoria.html?categoria=${encodeURIComponent(c)}"><span class="category-icon">${icons[c]}</span><div><strong>${c}</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a>`).join('');
 
@@ -68,10 +71,8 @@ async function loadContext() {
   recentStreamers = new Set(history.slice(0,12).map(item => item.streamerUid).filter(Boolean));
   stopCategories = watchFollowedCategories(user.uid, value => {
     followedCategories = value;
-    livesReady = true;
     renderLives();
-  }, () => {
-    livesReady = true;});
+  }, () => {});
 }
 
 function score(item) {
@@ -112,7 +113,7 @@ function renderLives() {
 
 function renderGrid(element, items, count, message) {
   const slot = '<div class="card home-live-slot home-live-empty" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div>';
-  element.innerHTML = items.map(liveCard).join('') + slot.repeat(count - items.length)
+  element.innerHTML = items.map((item, index) => liveCard(item, { priority: element === featured && index === 0 })).join('') + slot.repeat(count - items.length)
     + (!items.length ? `<div class="state home-live-state" role="status">${escapeHtml(message)}</div>` : '');
   element.setAttribute('aria-busy', 'false');
 }
@@ -128,15 +129,36 @@ function bindCards() {
 
 function startLives() {
   stopLive?.();
+  const generation = ++liveGeneration;
   livesReady = false;
-  stopLive = onSnapshot(query(collection(db, 'streams'), where('status', '==', 'live')), async snap => {
-    const base = snap.docs.map(d => ({ id: d.id, ...d.data(), viewerCount: Math.max(0, Number(d.data().viewerCount || 0)) }));
-    lives = await Promise.all(base.map(async item => {
-      const p = await getProfile(item.streamerUid).catch(() => null);
-      return { ...item, username: p?.username || 'Streamer', photoURL: p?.photoURL || '' };
-    }));
+  stopLive = onSnapshot(query(collection(db, 'streams'), where('status', '==', 'live')), snap => {
+    lives = snap.docs.map(d => {
+      const item = { id: d.id, ...d.data(), viewerCount: Math.max(0, Number(d.data().viewerCount || 0)) };
+      const profile = profiles.get(item.streamerUid);
+      return { ...item, username: profile?.username || 'Streamer', photoURL: profile?.photoURL || '' };
+    });
+    // Discover thumbnails immediately; profile requests must not block the cards.
     livesReady = true;
     renderLives();
+    for (const uid of new Set(lives.map(item => item.streamerUid))) {
+      if (profiles.has(uid)) continue;
+      if (!pendingProfiles.has(uid)) {
+        pendingProfiles.set(uid, getProfile(uid).then(profile => {
+          if (profile) profiles.set(uid, profile);
+          return profile;
+        }).catch(() => null).finally(() => pendingProfiles.delete(uid)));
+      }
+      pendingProfiles.get(uid).then(profile => {
+        if (!profile || generation !== liveGeneration) return;
+        lives = lives.map(item => item.streamerUid === uid
+          ? { ...item, username: profile.username || 'Streamer', photoURL: profile.photoURL || '' } : item);
+        document.querySelectorAll('.live-card').forEach(card => {
+          const item = lives.find(live => live.id === card.dataset.liveId && live.streamerUid === uid);
+          // Preserve the thumbnail DOM and layout when metadata arrives.
+          if (item) card.querySelector('.live-meta').outerHTML = liveMeta(item);
+        });
+      });
+    }
   }, () => {
     livesReady = true;
     renderGrid(featured, [], 3, 'Não foi possível carregar as lives.');
@@ -151,4 +173,4 @@ onAuthStateChanged(auth, async current => {
   renderLives();
 });
 
-window.addEventListener('pagehide', () => { stopLive?.(); stopCategories?.(); });
+window.addEventListener('pagehide', () => { ++liveGeneration; stopLive?.(); stopCategories?.(); });

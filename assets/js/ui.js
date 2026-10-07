@@ -98,8 +98,7 @@ export function footer() {
   `;
 }
 
-export function liveCard(live) {
-    const initial = (live.username || 'S').charAt(0).toUpperCase();
+export function liveCard(live, options = {}) {
     const source = parseStreamingSource(live.playbackURL || '');
     const platform = source ? streamingPlatformLabel(source.platform) : '';
 
@@ -107,7 +106,7 @@ export function liveCard(live) {
     <article class="card live-card" data-live-id="${escapeAttr(live.id)}">
       <div class="thumb">
         ${live.thumbnailURL
-        ? `<img width="640" height="360" src="${escapeAttr(live.thumbnailURL)}" alt="Thumbnail de ${escapeAttr(live.username || 'streamer')}">`
+        ? `<img width="640" height="360"${options.priority === true ? ' fetchpriority="high"' : ''} src="${escapeAttr(live.thumbnailURL)}" alt="Thumbnail de ${escapeAttr(live.username || 'streamer')}">`
         : '<div class="state">ZYTRIX</div>'}
 
         <span class="badge">● AO VIVO</span>
@@ -120,7 +119,14 @@ export function liveCard(live) {
         <span class="play">▶</span>
       </div>
 
-      <div class="live-meta">
+      ${liveMeta(live)}
+    </article>
+  `;
+}
+
+export function liveMeta(live) {
+    const initial = (live.username || 'S').charAt(0).toUpperCase();
+    return `<div class="live-meta">
         ${live.photoURL
         ? `<img width="34" height="34" class="avatar" src="${escapeAttr(live.photoURL)}" alt="Foto de ${escapeAttr(live.username || 'streamer')}">`
         : `<span class="avatar">${escapeHtml(initial)}</span>`}
@@ -131,7 +137,6 @@ export function liveCard(live) {
           <div class="live-cat">${escapeHtml(live.categoryId || '')}</div>
         </div>
       </div>
-    </article>
   `;
 }
 
