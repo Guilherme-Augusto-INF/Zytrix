@@ -1,6 +1,6 @@
 import { platformSource, ownPlatform } from './platform-backend.js';
 import { recoveryPayload } from './staging-recovery.js';
-import { auth, db, googleProvider, onAuthStateChanged, EmailAuthProvider, reauthenticateWithPopup, reauthenticateWithCredential, deleteUser, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot, updateDoc, query, collection, collectionGroup, where, limit, serverTimestamp, writeBatch } from './client.js';
+import { auth, db, onAuthStateChanged, doc, getDoc, getDocs, setDoc, onSnapshot, updateDoc, query, collection, where, limit, serverTimestamp } from './client.js';
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
 import { safeImageUrl } from './security.js';
@@ -488,104 +488,19 @@ async function createStreamer() {
             button.disabled = false;
     }
 }
-async function reauthenticateForDeletion() {
-    const providers = user.providerData.map(item => item.providerId);
-    if (providers.includes('google.com')) {
-        await reauthenticateWithPopup(user, googleProvider);
-        return;
-    }
-    if (providers.includes('password')) {
-        const password = window.prompt('Para confirmar a exclusão, digite sua senha atual:');
-        if (!password)
-            throw new Error('Senha não informada.');
-        const credential = EmailAuthProvider.credential(user.email, password);
-        await reauthenticateWithCredential(user, credential);
-        return;
-    }
-    throw new Error('Não foi possível reautenticar este método de login.');
-}
-async function deleteRefsInBatches(refs) {
-    const unique = [...new Map(refs.map(ref => [ref.path, ref])).values()];
-    for (let offset = 0; offset < unique.length; offset += 400) {
-        const batch = writeBatch(db);
-        unique.slice(offset, offset + 400).forEach(ref => batch.delete(ref));
-        await batch.commit();
-    }
-}
-async function collectAccountRefs(uid) {
-    const refs = [];
-    const ownLists = await Promise.all([
-        getDocs(collection(db, 'users', uid, 'following')),
-        getDocs(collection(db, 'users', uid, 'watchHistory')),
-        getDocs(collection(db, 'channels', uid, 'followers')).catch(() => null),
-        getDocs(query(collection(db, 'streams'), where('streamerUid', '==', uid)))
-    ]);
-    ownLists.forEach(snap => snap?.docs?.forEach(item => refs.push(item.ref)));
-    try {
-        const followerRefs = await getDocs(query(collectionGroup(db, 'followers'), where('uid', '==', uid)));
-        followerRefs.docs.forEach(item => refs.push(item.ref));
-    }
-    catch (error) {
-        console.warn('Não foi possível limpar todas as referências de seguidores.', error);
-    }
-    try {
-        const ownMessages = await getDocs(query(collectionGroup(db, 'chat'), where('uid', '==', uid)));
-        ownMessages.docs.forEach(item => refs.push(item.ref));
-    }
-    catch (error) {
-        console.warn('Não foi possível limpar todas as mensagens do usuário.', error);
-    }
-    refs.push(doc(db, 'channels', uid), doc(db, 'wallets', uid), doc(db, 'profiles', uid), doc(db, 'users', uid));
-    return refs;
-}
 async function deleteAccount() {
-    {
-        const message = document.querySelector('#delete-account-msg');
-        if (window.prompt('Seu perfil e conteúdo serão removidos. Registros financeiros e de segurança serão preservados. Digite EXCLUIR:') !== 'EXCLUIR')
-            return;
-        try {
-            closingAccount = true;
-            await ownPlatform(user.uid, 'account.delete', { confirmation: 'EXCLUIR', requestKey: crypto.randomUUID() });
-            walletUnsubscribe?.();
-            await (await import('./neon-browser.js')).signOut().catch(() => { });
-            localStorage.removeItem('zytrixSelectedStream');
-            location.href = 'index.html';
-        }
-        catch (error) {
-            closingAccount = false;
-            message.textContent = error.code === 'recent_login_required' ? 'Entre novamente e repita a exclusão nos próximos cinco minutos.' : 'Não foi possível excluir a conta.';
-        }
-        return;
-    }
     const message = document.querySelector('#delete-account-msg');
-    const button = document.querySelector('#delete-account');
-    const confirmation = window.prompt('Esta ação é permanente. Digite EXCLUIR para confirmar:');
-    if (confirmation !== 'EXCLUIR') {
-        message.innerHTML = '<div class="message err">Exclusão cancelada.</div>';
-        return;
-    }
-    button.disabled = true;
-    message.innerHTML = '<div class="message">Confirmando sua identidade...</div>';
+    if (window.prompt('Seu perfil e conteúdo serão removidos. Registros financeiros e de segurança serão preservados. Digite EXCLUIR:') !== 'EXCLUIR') return;
     try {
-        await reauthenticateForDeletion();
-        message.innerHTML = '<div class="message">Removendo dados da conta...</div>';
+        closingAccount = true;
+        await ownPlatform(user.uid, 'account.delete', { confirmation: 'EXCLUIR', requestKey: crypto.randomUUID() });
         walletUnsubscribe?.();
-        walletUnsubscribe = null;
-        const refs = await collectAccountRefs(user.uid);
-        await deleteRefsInBatches(refs);
-        await deleteUser(user);
-        localStorage.removeItem('zytrixSelectedStream');
-        localStorage.removeItem('zytrixSelectedStreamName');
-        localStorage.removeItem('zytrixSelectedStreamTitle');
+        await (await import('./neon-browser.js')).signOut().catch(() => {});
+        for (const key of ['zytrixSelectedStream', 'zytrixSelectedStreamName', 'zytrixSelectedStreamTitle']) localStorage.removeItem(key);
         location.href = 'index.html';
-    }
-    catch (error) {
-        console.error('Falha ao excluir conta:', error);
-        const text = error?.code === 'auth/requires-recent-login'
-            ? 'Entre novamente na conta e repita a exclusão.'
-            : 'Não foi possível concluir a exclusão. Nenhuma nova tentativa será feita automaticamente.';
-        message.innerHTML = `<div class="message err">${text}</div>`;
-        button.disabled = false;
+    } catch (error) {
+        closingAccount = false;
+        message.textContent = error.code === 'recent_login_required' ? 'Entre novamente e repita a exclusão nos próximos cinco minutos.' : 'Não foi possível excluir a conta.';
     }
 }
 onAuthStateChanged(auth, async (currentUser) => {
@@ -604,3 +519,4 @@ onAuthStateChanged(auth, async (currentUser) => {
         root.innerHTML = '<div class="state">Não foi possível carregar seu perfil.</div>';
     }
 });
+
