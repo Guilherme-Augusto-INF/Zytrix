@@ -57,7 +57,10 @@ export function parseStreamingSource(value = '') {
     try {
         const url = new URL(raw);
         const host = url.hostname.toLowerCase();
+        if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || (url.port && url.port !== '443')) return null;
+        const parts = url.pathname.split('/').filter(Boolean);
         if (TWITCH_HOSTS.has(host)) {
+            if (host !== 'player.twitch.tv' && (parts.length !== 1 || ['directory','downloads','jobs','settings','videos','search','subscriptions','wallet'].includes(parts[0].toLowerCase()))) return null;
             const username = host === 'player.twitch.tv'
                 ? String(url.searchParams.get('channel') || '').trim()
                 : firstPathSegment(url);
@@ -71,6 +74,7 @@ export function parseStreamingSource(value = '') {
             };
         }
         if (KICK_HOSTS.has(host)) {
+            if (parts.length !== 1 || ['categories','search','settings','following','browse'].includes(parts[0].toLowerCase())) return null;
             const username = firstPathSegment(url);
             if (!validKickUsername(username)) {
                 return null;
