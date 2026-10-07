@@ -171,6 +171,28 @@ export async function executePlatform(c, identity, action, data = {}) {
         from public.lives where owner_id=$1 and deleted_at is null order by created_at desc,id limit 100`,[u.id])).rows:[];
       return {channel,lives};
     }
+    case 'channel.create': {
+      const u=await actor(c,identity,true);
+      // Ownership and initial metadata come from the verified session and profile.
+      if(Object.keys(data).some(field=>field!=='playbackURL'))fail('invalid_input');
+      const raw=text(data.playbackURL,1,2048),source=parseStreamingSource(raw);
+      if(!safeStreamingUrl(raw)||!source)fail('invalid_playback_url');
+      const profile=(await c.query('select username,bio,photo_url from public.profiles where user_id=$1',[u.id])).rows[0];
+      if(!profile)fail('profile_not_found',403);
+      let channel=(await c.query('select id,public_id,deleted_at from public.channels where owner_id=$1 for update',[u.id])).rows[0];
+      if(channel?.deleted_at)fail('channel_unavailable',409);
+      const created=!channel;
+      if(!channel)channel=(await c.query(`insert into public.channels(public_id,owner_id,name,slug,description,avatar_url)
+        values($1::text,$1::uuid,$2,$3,$4,$5) returning id,public_id`,
+        [u.id,profile.username,'channel-'+u.id,profile.bio??'',profile.photo_url??''])).rows[0];
+      // actor() serializes requests for this account. Retries never reset an existing live.
+      let stream=(await c.query(`select public_id from public.lives where channel_id=$1 and owner_id=$2
+        and deleted_at is null order by created_at,id limit 1`,[channel.id,u.id])).rows[0];
+      if(!stream)stream=(await c.query(`insert into public.lives(public_id,channel_id,owner_id,title,playback_url,thumbnail_url)
+        values($1::text,$2,$1::uuid,$3,$4,$5) returning public_id`,
+        [u.id,channel.id,'Minha primeira live na Zytrix',source.canonicalUrl,profile.photo_url??''])).rows[0];
+      return {channelId:channel.public_id,streamId:stream.public_id,created};
+    }
     case 'channel.save': {
       const u=await actor(c,identity,true);
       const name=text(data.name?.trim(),1,80),slug=text(data.slug,3,63),description=text(data.description??'',0,800);

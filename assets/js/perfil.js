@@ -396,86 +396,25 @@ async function createStreamer() {
     message.textContent = 'Validando sua conta e configurando canal...';
     try {
 
-        // both the Auth user and token so newly verified users can continue.
+        // Refresh the managed session so newly verified users can continue.
         await user.reload();
         await user.getIdToken(true);
         if (!user.emailVerified) {
             message.innerHTML = '<div class="message err">Verifique seu e-mail antes de criar a transmissão. Depois, clique novamente neste botão.</div>';
             return;
         }
-        const channelRef = doc(db, 'channels', user.uid);
-        const channelSnap = await getDoc(channelRef);
-        const existingChannel = channelSnap.exists() ? channelSnap.data() : null;
-        // First try the stored stream ID; fallback to historical streams.
-        let existingStream = null;
-        if (existingChannel?.currentStreamId) {
-            const snap = await getDoc(doc(db, 'streams', existingChannel.currentStreamId));
-            if (snap.exists() && snap.data().streamerUid === user.uid) {
-                existingStream = { id: snap.id, ...snap.data() };
-            }
-        }
-        if (!existingStream)
-            existingStream = await findStream(user.uid);
-        const streamId = existingStream?.id || user.uid;
-        const batch = writeBatch(db);
-        if (!existingChannel) {
-            // Only create the channel if absent. Never reset a user's followers
-            // or channel metadata while repairing an orphan stream.
-            batch.set(channelRef, {
-                ownerUid: user.uid,
-                channelName: String(profile?.username || user.displayName || 'Streamer').slice(0, 30),
-                description: String(profile?.bio || '').slice(0, 500),
-                avatarURL: safeImageUrl(profile?.photoURL || ''),
-                bannerURL: '',
-                categoryId: existingStream?.categoryId || 'Just Chatting',
-                isLive: existingStream?.status === 'live',
-                currentStreamId: streamId,
-                createdAt: serverTimestamp()
-            });
-        }
-        else if (existingChannel.currentStreamId !== streamId) {
-            batch.update(channelRef, { currentStreamId: streamId });
-        }
-        if (existingStream) {
-            batch.update(doc(db, 'streams', streamId), {
-                playbackURL: source.canonicalUrl
-            });
-        }
-        else {
-            batch.set(doc(db, 'streams', streamId), {
-                streamerUid: user.uid,
-                channelId: user.uid,
-                title: 'Minha primeira live na Zytrix',
-                description: '',
-                categoryId: existingChannel?.categoryId || 'Just Chatting',
-                thumbnailURL: safeImageUrl(profile?.photoURL || ''),
-                status: 'offline',
-                playbackURL: source.canonicalUrl,
-                startedAt: null,
-                endedAt: null,
-                createdAt: serverTimestamp(),
-                viewerCount: 0
-            });
-        }
-        await batch.commit();
-        // Verify the persisted state before presenting creation as successful.
-        const [savedChannel, savedStream] = await Promise.all([
-            getDoc(channelRef),
-            getDoc(doc(db, 'streams', streamId))
-        ]);
-        if (!savedChannel.exists() || !savedStream.exists()
-            || savedStream.data().streamerUid !== user.uid) {
+        const saved = await ownPlatform(user.uid, 'channel.create', { playbackURL: source.canonicalUrl });
+        if (saved.channelId !== user.uid || !saved.streamId)
             throw new Error('channel-verification-failed');
-        }
         // The next page loads the persisted channel and stream independently.
         location.href = 'config-live.html';
     }
     catch (error) {
         console.error('Erro ao criar/recuperar canal:', error);
-        if (error?.code === 'permission-denied') {
+        if (['permission-denied', 'verified_email_required', 'forbidden', 'profile_not_found', 'account_restricted'].includes(error?.code)) {
             message.textContent = 'O banco recusou a criação. Verifique seu e-mail e as permissões da conta. Se continuar, informe o suporte.';
         }
-        else if (error?.code === 'unavailable' || error?.code === 'auth/network-request-failed') {
+        else if (['unavailable', 'service_unavailable', 'auth/network-request-failed'].includes(error?.code)) {
             message.textContent = 'Sem conexão com o servidor. Verifique sua internet e tente novamente.';
         }
         else {
