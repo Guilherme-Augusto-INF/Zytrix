@@ -94,6 +94,7 @@ export async function refreshSession() {
     if (refreshPromise)
         return refreshPromise;
     const version = generation;
+    const priorUser = auth.currentUser;
     refreshPromise = (async () => {
         const session = await authRequest('get-session');
         if (version !== generation)
@@ -126,8 +127,10 @@ export async function refreshSession() {
             notify();
         return candidate;
     })().catch(error => { console.warn('Neon session refresh failed:', error.code ?? error.message); if (version === generation) {
-        auth.currentUser = null;
-        notify();
+        const denied = [401, 403].includes(error.status) || ['authentication_required', 'account_disabled', 'invalid_session_token', 'authentication_changed'].includes(error.code ?? error.message);
+        auth.currentUser = denied ? null : priorUser;
+        if (denied) notify();
+        else globalThis.dispatchEvent?.(new Event('zytrix-auth-unavailable'));
     } throw error; }).finally(() => { refreshPromise = null; });
     return refreshPromise;
 }

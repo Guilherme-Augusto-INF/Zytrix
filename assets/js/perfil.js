@@ -16,6 +16,9 @@ let stream = null;
 let walletUnsubscribe = null;
 let creatingChannel = false;
 let closingAccount = false;
+globalThis.addEventListener('zytrix-auth-unavailable', () => {
+    if (!user) root.innerHTML = '<div class="state">Não foi possível confirmar sua sessão. <a href="perfil.html">Tentar novamente</a></div>';
+});
 function dateText(timestamp) {
     try {
         return timestamp?.toDate?.().toLocaleDateString('pt-BR', {

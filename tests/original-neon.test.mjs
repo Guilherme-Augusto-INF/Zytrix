@@ -16,6 +16,19 @@ async function authAdapter(fetchImpl,platformImpl=async()=>({uid:'preserved',enr
 }
 const response=value=>({ok:true,json:async()=>value});
 const authConfig=response({postgresEnabled:true,authentication:'neon',neonAuthUrl:'https://staging.invalid/auth'});
+test('temporary session outages preserve the confirmed identity, while rejection clears it',async()=>{
+ let failure;
+ const a=await authAdapter(async url=>{
+  if(url==='/api/v1/config')return authConfig;
+  if(failure==='network')throw TypeError('Failed to fetch');
+  if(failure==='denied')return {ok:false,status:401,json:async()=>({code:'authentication_required'})};
+  return response({user:{id:'fixture',emailVerified:true},session:{token:'fixture-session'}});
+ });
+ await a.refreshSession();const confirmed=a.auth.currentUser;
+ failure='network';await assert.rejects(a.refreshSession(),/Failed to fetch/);assert.equal(a.auth.currentUser,confirmed);
+ failure=undefined;assert.equal((await a.refreshSession()).subject,'fixture');
+ failure='denied';await assert.rejects(a.refreshSession());assert.equal(a.auth.currentUser,null);
+});
 test('parallel API reads share one JWT refresh and reuse the same unexpired session token',async()=>{
  let requests=0;const sub='fixture-subject',token='x.'+btoa(JSON.stringify({sub,exp:Math.floor(Date.now()/1000)+900}))+'.x';
  const adapter=await authAdapter(async url=>{if(url==='/api/v1/config')return authConfig;if(url.endsWith('/get-session'))return response({user:{id:sub,emailVerified:true},session:{token:'fixture-session'}});requests++;return response({token});});
