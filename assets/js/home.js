@@ -124,6 +124,35 @@ function renderGrid(element, items, count, message) {
     return;
   }
   gridKeys.set(element, keys);
+  const previews = [...element.querySelectorAll('.home-live-slot')];
+  if (items.length && previews.some((slot, index) => slot.dataset.liveId === items[index]?.id)) {
+    items.forEach((item, index) => {
+      const slot = previews[index];
+      const image = slot?.querySelector('.thumb img');
+      const template = document.createElement('template');
+      template.innerHTML = liveCard(item, { priority: element === featured && index === 0 });
+      const card = template.content.firstElementChild;
+      if (slot?.dataset.liveId === item.id && image?.getAttribute('src') === item.thumbnailURL) {
+        // Keep the painted image in its original position during card hydration.
+        slot.className = card.className;
+        slot.removeAttribute('aria-hidden');
+        slot.querySelector('.live-meta').replaceWith(card.querySelector('.live-meta'));
+        const thumb = slot.querySelector('.thumb');
+        card.querySelectorAll('.thumb > :not(img)').forEach(child => thumb.appendChild(child));
+        image.alt = `Thumbnail de ${item.username || 'streamer'}`;
+      } else {
+        slot?.replaceWith(card);
+      }
+    });
+    previews.slice(items.length).forEach(slot => {
+      delete slot.dataset.liveId;
+      slot.classList.add('home-live-empty');
+      slot.querySelector('.thumb img')?.remove();
+    });
+    element.querySelector('.home-live-state')?.remove();
+    element.setAttribute('aria-busy', 'false');
+    return;
+  }
   const slot = '<div class="card home-live-slot home-live-empty" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div>';
   element.innerHTML = items.map((item, index) => liveCard(item, { priority: element === featured && index === 0 })).join('') + slot.repeat(count - items.length)
     + (!items.length ? `<div class="state home-live-state" role="status">${escapeHtml(message)}</div>` : '');
