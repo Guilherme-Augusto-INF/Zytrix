@@ -1,0 +1,45 @@
+name: Temporary production performance audit
+on:
+  push:
+    branches: [validation/home-performance-20261007]
+permissions:
+  contents: read
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Prepare Chromium and Lighthouse
+        run: |
+          node --version
+          google-chrome --version
+          npm install --prefix /tmp/zytrix-audit lighthouse@13.5.0
+      - name: Warm public catalogue cache
+        run: |
+          curl --fail --silent --output /dev/null --dump-header - https://zytrix-lives.vercel.app/api/home-lives
+          curl --fail --silent --output /dev/null --dump-header - https://zytrix-lives.vercel.app/api/home-lives
+      - name: Measure production mobile twice and desktop
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: |
+          for mode in mobile-1 mobile-2 desktop; do
+            args=()
+            if [ "$mode" = desktop ]; then args+=(--preset=desktop); fi
+            /tmp/zytrix-audit/node_modules/.bin/lighthouse https://zytrix-lives.vercel.app/ "${args[@]}" --chrome-flags="--headless --no-sandbox --disable-gpu" --quiet --output=json --output-path="$mode.json"
+            REPORT="$mode.json" node <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync(process.env.REPORT));
+          const metrics={report:process.env.REPORT,url:r.finalDisplayedUrl,time:r.fetchTime,lighthouse:r.lighthouseVersion};
+          for (const [id,c] of Object.entries(r.categories)) metrics[id]=Math.round(c.score*100);
+          for (const id of ['first-contentful-paint','largest-contentful-paint','total-blocking-time','cumulative-layout-shift','speed-index']) metrics[id]=r.audits[id].numericValue;
+          console.log('ZYTRIX_METRICS '+JSON.stringify(metrics));
+          for(const [id,a] of Object.entries(r.audits)) if(a.score!==null && a.score<1 && ['layout-shifts','lcp-breakdown-insight','lcp-discovery-insight','errors-in-console','image-delivery-insight','network-dependency-tree-insight'].includes(id)) console.log('ZYTRIX_AUDIT '+JSON.stringify({id,title:a.title,details:a.details}));
+          NODE
+          done
+      - name: Save full reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zytrix-lighthouse-20261007
+          path: "*.json"
+          retention-days: 7
