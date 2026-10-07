@@ -11,6 +11,7 @@ import {
   selectStream
 } from './firebase.js';
 import { header, footer, liveCard, liveMeta, categories, icons, escapeHtml } from './ui.js';
+import { initialLives } from './home-data.js';
 import {
   getPlatformPreferences,
   watchFollowedCategories,
@@ -34,8 +35,10 @@ let livesReady = false;
 let stopLive = null;
 let stopCategories = null;
 let liveGeneration = 0;
+let initialLivesUsed = false;
 const profiles = new Map();
 const pendingProfiles = new Map();
+const gridKeys = new WeakMap();
 
 if (!cats.children.length) cats.innerHTML = Object.keys(categories).map(c => `<a class="card category-card" href="categoria.html?categoria=${encodeURIComponent(c)}"><span class="category-icon">${icons[c]}</span><div><strong>${c}</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a>`).join('');
 
@@ -112,6 +115,15 @@ function renderLives() {
 }
 
 function renderGrid(element, items, count, message) {
+  const keys = JSON.stringify(items.map(item => [item.id, item.thumbnailURL || '', item.playbackURL || '']));
+  if (items.length && gridKeys.get(element) === keys) {
+    element.querySelectorAll('.live-card').forEach((card, index) => {
+      updateCardMetadata(card, items[index]);
+      card.querySelector('.viewers').textContent = `👁 ${Number(items[index].viewerCount || 0).toLocaleString('pt-BR')}`;
+    });
+    return;
+  }
+  gridKeys.set(element, keys);
   const slot = '<div class="card home-live-slot home-live-empty" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div>';
   element.innerHTML = items.map((item, index) => liveCard(item, { priority: element === featured && index === 0 })).join('') + slot.repeat(count - items.length)
     + (!items.length ? `<div class="state home-live-state" role="status">${escapeHtml(message)}</div>` : '');
@@ -119,47 +131,66 @@ function renderGrid(element, items, count, message) {
 }
 
 function bindCards() {
-  document.querySelectorAll('.live-card').forEach(card => card.addEventListener('click', () => {
+  document.querySelectorAll('.live-card').forEach(card => { card.onclick = () => {
     const live = lives.find(item => item.id === card.dataset.liveId);
     if (!live) return;
     selectStream(live);
     location.href = `live.html?stream=${encodeURIComponent(live.id)}`;
-  }));
+  }; });
+}
+
+function updateCardMetadata(card, item) {
+  card.querySelector('.live-meta').outerHTML = liveMeta(item);
+  const thumbnail = card.querySelector('.thumb img');
+  if (thumbnail) thumbnail.alt = `Thumbnail de ${item.username || 'streamer'}`;
+}
+
+function applyLives(base, generation) {
+  lives = base.map(data => {
+    const item = { ...data, viewerCount: Math.max(0, Number(data.viewerCount || 0)) };
+    const profile = profiles.get(item.streamerUid);
+    return { ...item, username: profile?.username || 'Streamer', photoURL: profile?.photoURL || '' };
+  });
+  // Discover thumbnails immediately; profile requests must not block the cards.
+  livesReady = true;
+  renderLives();
+  for (const uid of new Set(lives.map(item => item.streamerUid))) {
+    if (profiles.has(uid)) continue;
+    if (!pendingProfiles.has(uid)) {
+      pendingProfiles.set(uid, getProfile(uid).then(profile => {
+        if (profile) profiles.set(uid, profile);
+        return profile;
+      }).catch(() => null).finally(() => pendingProfiles.delete(uid)));
+    }
+    pendingProfiles.get(uid).then(profile => {
+      if (!profile || generation !== liveGeneration) return;
+      lives = lives.map(item => item.streamerUid === uid
+        ? { ...item, username: profile.username || 'Streamer', photoURL: profile.photoURL || '' } : item);
+      document.querySelectorAll('.live-card').forEach(card => {
+        const item = lives.find(live => live.id === card.dataset.liveId && live.streamerUid === uid);
+        // Preserve the thumbnail DOM and layout when metadata arrives.
+        if (item) updateCardMetadata(card, item);
+      });
+    });
+  }
 }
 
 function startLives() {
   stopLive?.();
   const generation = ++liveGeneration;
+  let receivedSnapshot = false;
   livesReady = false;
-  stopLive = onSnapshot(query(collection(db, 'streams'), where('status', '==', 'live')), snap => {
-    lives = snap.docs.map(d => {
-      const item = { id: d.id, ...d.data(), viewerCount: Math.max(0, Number(d.data().viewerCount || 0)) };
-      const profile = profiles.get(item.streamerUid);
-      return { ...item, username: profile?.username || 'Streamer', photoURL: profile?.photoURL || '' };
+  if (!initialLivesUsed) {
+    initialLivesUsed = true;
+    initialLives.then(base => {
+      if (base && !receivedSnapshot && generation === liveGeneration) applyLives(base, generation);
     });
-    // Discover thumbnails immediately; profile requests must not block the cards.
-    livesReady = true;
-    renderLives();
-    for (const uid of new Set(lives.map(item => item.streamerUid))) {
-      if (profiles.has(uid)) continue;
-      if (!pendingProfiles.has(uid)) {
-        pendingProfiles.set(uid, getProfile(uid).then(profile => {
-          if (profile) profiles.set(uid, profile);
-          return profile;
-        }).catch(() => null).finally(() => pendingProfiles.delete(uid)));
-      }
-      pendingProfiles.get(uid).then(profile => {
-        if (!profile || generation !== liveGeneration) return;
-        lives = lives.map(item => item.streamerUid === uid
-          ? { ...item, username: profile.username || 'Streamer', photoURL: profile.photoURL || '' } : item);
-        document.querySelectorAll('.live-card').forEach(card => {
-          const item = lives.find(live => live.id === card.dataset.liveId && live.streamerUid === uid);
-          // Preserve the thumbnail DOM and layout when metadata arrives.
-          if (item) card.querySelector('.live-meta').outerHTML = liveMeta(item);
-        });
-      });
-    }
+  }
+  stopLive = onSnapshot(query(collection(db, 'streams'), where('status', '==', 'live')), snap => {
+    receivedSnapshot = true;
+    applyLives(snap.docs.map(d => ({ id: d.id, ...d.data() })), generation);
   }, () => {
+    if (livesReady) return;
     livesReady = true;
     renderGrid(featured, [], 3, 'Não foi possível carregar as lives.');
     renderGrid(liveNow, [], 4, 'Não foi possível carregar as lives.');
