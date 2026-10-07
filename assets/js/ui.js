@@ -98,7 +98,7 @@ export function footer() {
   `;
 }
 
-export function liveCard(live) {
+export function liveCard(live, options = {}) {
     const source = parseStreamingSource(live.playbackURL || '');
     const platform = source ? streamingPlatformLabel(source.platform) : '';
 
@@ -106,7 +106,7 @@ export function liveCard(live) {
     <article class="card live-card" data-live-id="${escapeAttr(live.id)}">
       <div class="thumb">
         ${live.thumbnailURL
-        ? `<img width="640" height="360" src="${escapeAttr(live.thumbnailURL)}" alt="Thumbnail de ${escapeAttr(live.username || 'streamer')}">`
+        ? `<img width="640" height="360"${options.priority === true ? ' fetchpriority="high"' : ''} src="${escapeAttr(live.thumbnailURL)}" alt="Thumbnail de ${escapeAttr(live.username || 'streamer')}">`
         : '<div class="state">ZYTRIX</div>'}
 
         <span class="badge">● AO VIVO</span>
