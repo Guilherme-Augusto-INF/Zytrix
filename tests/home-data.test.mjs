@@ -20,13 +20,9 @@ test('consulta inicial preserva tipos, distingue vazio de falha e usa somente ac
   try {
     for (const [index, scenario] of cases.entries()) {
       globalThis.fetch = async (url, options) => {
-        assert.match(url, /^https:\/\/firestore\.googleapis\.com\/v1\/.+:runQuery$/);
-        assert.equal(options.credentials, 'omit');
-        assert.equal(options.cache, 'no-store');
-        assert.equal(options.headers.Authorization, undefined);
-        const query = JSON.parse(options.body).structuredQuery;
-        assert.equal(query.from[0].collectionId, 'streams');
-        assert.deepEqual(query.where.fieldFilter, { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'live' } });
+        assert.equal(url, '/api/home-lives');
+        assert.equal(options.credentials, 'same-origin');
+        assert.equal(options.headers, undefined);
         if (scenario.error) throw scenario.error;
         return scenario.response;
       };
