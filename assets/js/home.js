@@ -30,6 +30,7 @@ let following = new Set();
 let followedCategories = new Set();
 let recentStreamers = new Set();
 let lives = [];
+let livesReady = false;
 let stopLive = null;
 let stopCategories = null;
 
@@ -67,8 +68,10 @@ async function loadContext() {
   recentStreamers = new Set(history.slice(0,12).map(item => item.streamerUid).filter(Boolean));
   stopCategories = watchFollowedCategories(user.uid, value => {
     followedCategories = value;
+    livesReady = true;
     renderLives();
-  }, () => {});
+  }, () => {
+    livesReady = true;});
 }
 
 function score(item) {
@@ -81,6 +84,7 @@ function score(item) {
 }
 
 function renderLives() {
+  if (!livesReady) return;
   const visible = filterMature(lives, preferences);
   const recommended = [...visible].sort((a,b) => score(b) - score(a));
   const trending = [...visible].sort((a,b) => Number(b.viewerCount || 0) - Number(a.viewerCount || 0));
@@ -107,7 +111,7 @@ function renderLives() {
 }
 
 function renderGrid(element, items, count, message) {
-  const slot = '<div class="card home-live-slot" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div>';
+  const slot = '<div class="card home-live-slot home-live-empty" aria-hidden="true"><div class="thumb"></div><div class="live-meta"></div></div>';
   element.innerHTML = items.map(liveCard).join('') + slot.repeat(count - items.length)
     + (!items.length ? `<div class="state home-live-state" role="status">${escapeHtml(message)}</div>` : '');
   element.setAttribute('aria-busy', 'false');
@@ -124,14 +128,17 @@ function bindCards() {
 
 function startLives() {
   stopLive?.();
+  livesReady = false;
   stopLive = onSnapshot(query(collection(db, 'streams'), where('status', '==', 'live')), async snap => {
     const base = snap.docs.map(d => ({ id: d.id, ...d.data(), viewerCount: Math.max(0, Number(d.data().viewerCount || 0)) }));
     lives = await Promise.all(base.map(async item => {
       const p = await getProfile(item.streamerUid).catch(() => null);
       return { ...item, username: p?.username || 'Streamer', photoURL: p?.photoURL || '' };
     }));
+    livesReady = true;
     renderLives();
   }, () => {
+    livesReady = true;
     renderGrid(featured, [], 3, 'Não foi possível carregar as lives.');
     renderGrid(liveNow, [], 4, 'Não foi possível carregar as lives.');
   });

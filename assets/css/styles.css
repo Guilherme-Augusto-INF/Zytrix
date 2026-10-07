@@ -1301,7 +1301,9 @@ select:focus-visible {
 /* Home grids keep the same geometry while live data and images arrive. */
 .home-page #featured,
 .home-page #live-now { position: relative; }
-.home-page .home-live-slot { visibility: hidden; overflow: hidden; }
+.home-page .home-live-slot { overflow: hidden; }
+.home-page .home-live-empty { visibility: hidden; }
+.home-page .home-live-slot:not(.home-live-empty) .live-meta::before { content: ""; width: 70%; height: 34px; border-radius: 6px; background: linear-gradient(#243244 0 12px, transparent 12px 18px, #172334 18px 26px, transparent 26px); }
 .home-page .live-meta { height: 62px; min-width: 0; }
 .home-page .live-meta > div { min-width: 0; }
 .home-page .live-title,
