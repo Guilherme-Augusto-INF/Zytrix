@@ -10,7 +10,7 @@ export function imageUploadMarkup({id,kind,url=''}) {
  <div class="image-upload-frame"><span class="image-empty" ${safe?'hidden':''}>${photo?'Sem foto':'Sem thumbnail'}</span><img ${safe?`src="${escapeAttr(safe)}"`:''} ${safe?'':'hidden'} width="${photo?512:1280}" height="${photo?512:720}" alt="${photo?'Foto atual':'Thumbnail atual'}"><canvas width="${photo?512:1280}" height="${photo?512:720}" hidden aria-label="Prévia da imagem selecionada"></canvas></div>
  <input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden>
  <div class="image-crop" hidden><label>Zoom <input data-crop="zoom" type="range" min="1" max="3" step="0.05" value="1"></label><label>Posição horizontal <input data-crop="x" type="range" min="0" max="100" value="50"></label><label>Posição vertical <input data-crop="y" type="range" min="0" max="100" value="50"></label></div>
- <p class="muted">JPEG, PNG ou WebP · até 3 MB. Confira a prévia antes de confirmar${photo?' e ajuste o recorte':''}.</p>
+ <p class="muted">Imagens públicas. JPEG, PNG ou WebP · até 3 MB. Confira a prévia antes de confirmar${photo?' e ajuste o recorte':''}.</p>
  <div class="image-actions"><button type="button" class="btn" data-choose>${safe?'Alterar foto':'Enviar foto'}</button><button type="button" class="btn btn-primary" data-upload hidden>Confirmar envio</button><button type="button" class="btn" data-cancel hidden>Cancelar</button><button type="button" class="btn btn-danger" data-remove ${safe?'':'hidden'}>Remover foto</button></div>
  <progress max="100" value="0" hidden aria-label="Progresso do envio"></progress><p class="image-status" role="status" aria-live="polite"></p></section>`;
 }
