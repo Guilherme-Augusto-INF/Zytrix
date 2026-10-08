@@ -1,3 +1,4 @@
+import {imageUploadMarkup,mountImageUpload} from './image-upload.js';
 import { platformSource, ownPlatform } from './platform-backend.js';
 import { recoveryPayload } from './staging-recovery.js';
 import { auth, db, onAuthStateChanged, doc, getDoc, getDocs, setDoc, onSnapshot, updateDoc, query, collection, where, limit, serverTimestamp } from './client.js';
@@ -8,6 +9,7 @@ header();
 footer();
 const root = document.querySelector('#profile-root');
 let user = null;
+let disposeImageUpload=()=>{};
 let profile = null;
 let account = null;
 let wallet = null;
@@ -95,6 +97,7 @@ async function load() {
     });
 }
 function render() {
+    disposeImageUpload();
     const initials = (profile.username || 'U').charAt(0).toUpperCase();
     const streamSource = parseStreamingSource(stream?.playbackURL || '');
     const platformLabel = streamSource
@@ -169,19 +172,7 @@ function render() {
           >
         </div>
 
-        <div class="form-group">
-          <label for="edit-photo">URL da foto</label>
-          <input
-            id="edit-photo"
-            class="input"
-            type="url"
-            maxlength="2048"
-            autocomplete="url"
-            placeholder="https://lh3.googleusercontent.com/..."
-            value="${escapeAttr(profile.photoURL || '')}"
-          >
-          <small class="muted">Use uma URL HTTPS direta de imagem pública de um provedor compatível. Não cole o link da página de perfil.</small>
-        </div>
+        ${imageUploadMarkup({id:'profile-image-upload',kind:'profile',url:profile.photoURL})}
 
         <div class="form-group">
           <label for="edit-bio">Bio</label>
@@ -206,6 +197,7 @@ function render() {
       ${channel
         ? `
           <h2>Seu canal está pronto</h2>
+          <img class="profile-stream-thumbnail" width="1280" height="720" src="${escapeAttr(safeImageUrl(stream?.thumbnailURL || '') || 'assets/img/placeholder.svg')}" alt="Thumbnail da sua live" loading="lazy">
 
           <p class="muted">
             Status:
@@ -280,6 +272,7 @@ function render() {
     document.querySelector('#edit-toggle').onclick = () => {
         document.querySelector('#edit-area').classList.toggle('hidden');
     };
+    disposeImageUpload=mountImageUpload({id:'profile-image-upload',kind:'profile',url:profile.photoURL,onSaved:url=>{profile.photoURL=url;const photo=root.querySelector('.profile-photo');if(photo)photo.outerHTML=url?`<img class="profile-photo" width="140" height="140" src="${escapeAttr(url)}" alt="Foto de perfil">`:'<div class="profile-photo" aria-label="Sem foto de perfil">Z</div>';}});
     document.querySelector('#save-profile').onclick = saveProfile;
     document.querySelector('#delete-account').onclick = deleteAccount;
     if (!channel || !stream) {
@@ -290,15 +283,10 @@ async function saveProfile() {
     const message = document.querySelector('#profile-msg');
     const button = document.querySelector('#save-profile');
     const name = document.querySelector('#edit-name').value.trim();
-    const rawPhoto = document.querySelector('#edit-photo').value.trim();
-    const photoURL = safeImageUrl(rawPhoto);
+    const photoURL = safeImageUrl(profile.photoURL || '');
     const bio = document.querySelector('#edit-bio').value.trim();
     if (name.length < 2 || name.length > 30) {
         message.textContent = 'O nome deve ter de 2 a 30 caracteres.';
-        return;
-    }
-    if (rawPhoto && !photoURL) {
-        message.textContent = 'URL da foto não permitida. Use uma imagem HTTPS de Google, Twitch, Kick, YouTube ou provedores de imagem permitidos. Links comuns de páginas ou arquivos privados não funcionam.';
         return;
     }
     if (bio.length > 500) {
@@ -321,7 +309,7 @@ async function saveProfile() {
     message.textContent = 'Salvando perfil...';
     try {
         const profileRef = doc(db, 'profiles', user.uid);
-        const data = { photoURL, bio, name:document.querySelector('#edit-display-name').value.trim() };
+        const data = { bio, name:document.querySelector('#edit-display-name').value.trim() };
         if (changedName) {
             data.username = name;
             data.usernameUpdatedAt = serverTimestamp();
@@ -347,10 +335,10 @@ async function saveProfile() {
             const channelRef = doc(db, 'channels', user.uid);
             const channelSnap = await getDoc(channelRef);
             if (channelSnap.exists()) {
-                const channelUpdate = { avatarURL: photoURL };
+                const channelUpdate = {};
                 if (changedName)
                     channelUpdate.channelName = name;
-                await updateDoc(channelRef, channelUpdate);
+                if(changedName)await updateDoc(channelRef, channelUpdate);
             }
         }
         catch (syncError) {

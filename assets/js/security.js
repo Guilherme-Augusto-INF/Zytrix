@@ -1,3 +1,4 @@
+import {managedImageUrl} from './image-policy.js';
 const HTTPS = 'https:';
 const HOST_GROUPS = Object.freeze({
     twitch: ['twitch.tv', 'www.twitch.tv', 'm.twitch.tv', 'player.twitch.tv'],
@@ -63,7 +64,7 @@ export function safeSocialUrl(kind, value = '') {
 export function safeImageUrl(value = '') {
     if (!value)
         return '';
-    return safeHttpsUrl(value, HOST_GROUPS.profileImages);
+    return managedImageUrl(value) ? value : safeHttpsUrl(value, HOST_GROUPS.profileImages);
 }
 export function hardenExternalLink(anchor, value, allowedHosts = []) {
     if (!anchor)

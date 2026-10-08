@@ -211,6 +211,7 @@ function render() {
               </div>
             </div>
 
+            <img class="live-thumbnail-preview" width="160" height="90" src="${escapeAttr(safeImageUrl(stream.thumbnailURL)||'assets/img/placeholder.svg')}" alt="Thumbnail da transmissão" loading="lazy">
             <div class="viewer-panel">
               <span class="muted" style="font-size:10px">ESPECTADORES</span>
               <strong id="live-viewer-count">👁 ${Math.max(0, Number(stream.viewerCount || 0)).toLocaleString('pt-BR')}</strong>
