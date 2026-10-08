@@ -60,7 +60,7 @@ export async function executeModules(c,identity,action,data,ctx) {
   const u=await actor(c,identity);
   const accounts=await rows(c,'select "providerId" from neon_auth.account where "userId"=$1',[u.id]);
   const accepted=await one(c,'select 1 from public.policy_acceptances where user_id=$1 limit 1',[u.id]);
-  return {uid:u.id,provider:accounts.some(a=>a.providerId==='google')?'google':'password',enrollmentRequired:!accepted};
+  return {uid:u.id,admin:u.admin,provider:accounts.some(a=>a.providerId==='google')?'google':'password',enrollmentRequired:!accepted};
  }
  case 'progress.get': {
   const u=await actor(c,identity);
@@ -174,7 +174,7 @@ async function readDocument(c,identity,data,ctx) {
  let list=[];
  if(kind==='profiles')list=await rows(c,`select i.id::text as id,i.id::text as uid,p.name,p.username,p.photo_url as "photoURL",p.bio,p.created_at as "createdAt",p.username_updated_at as "usernameUpdatedAt" from public.profiles p join public.identities i on i.id=p.user_id where not exists(select 1 from public.user_accounts a where a.user_id=p.user_id and a.deleted_at is not null) and ($1::text is null or i.id::text=$1) order by p.created_at desc,p.user_id limit 200`,[identifier??null]);
  else if(kind==='wallets'){if(!identifier){if(!u?.admin)fail('forbidden',403);list=await rows(c,'select i.id::text as id,w.balance::text,w.total_sent::text as "totalSent",w.total_received::text as "totalReceived" from public.wallets w join public.identities i on i.id=w.user_id order by w.updated_at desc,w.user_id limit 200');}else{owned(identifier);const result=await ctx.executePlatform(c,identity,'wallet.get',{});list=result.wallet?[{id:identifier,uid:identifier,...result.wallet,totalSent:result.wallet.total_sent,totalReceived:result.wallet.total_received}]:[];}}
- else if(kind==='admins'){if(!u)fail('authentication_required',401);list=await rows(c,'select i.id::text as id,active from public.admins a join public.identities i on i.id=a.user_id where ($1::text is null or i.id::text=$1) and (i.id=$2 or $3) order by i.id limit 100',[identifier??null,u.id,u.admin]);}
+ else if(kind==='admins'){if(!u)fail('authentication_required',401);list=await rows(c,'select i.id::text as id,(a.active and a.revoked_at is null) as active from public.admins a join public.identities i on i.id=a.user_id where ($1::text is null or i.id::text=$1) and (i.id=$2 or $3) order by i.id limit 100',[identifier??null,u.id,u.admin]);}
  else if(kind==='governance')list=await rows(c,`select 'config' as id,reports_enabled as "reportsEnabled",rules_version as "rulesVersion",terms_version as "termsVersion",privacy_version as "privacyVersion",terms_effective as "termsEffective",scope,signup_enabled as "signupEnabled" from public.governance_config where singleton`);
  else if(kind==='categories')list=(await ctx.executePlatform(c,identity,'categories.list',{})).categories.map(x=>({...x,id:x.id}));
  else if(kind==='users'){

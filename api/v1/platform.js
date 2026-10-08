@@ -1,6 +1,7 @@
 import { authenticate } from '../../server/neon/auth.mjs';
 import { platformEnabled, platformPool } from '../../server/neon/platform-pool.mjs';
 import { ApiError, executePlatform } from '../../server/neon/platform.mjs';
+import {isReadAction,readContext} from '../../server/neon/read-context.mjs';
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store');
   if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({error:'method_not_allowed'});}
@@ -14,9 +15,10 @@ export default async function handler(req,res) {
     if(!body||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body),'utf8')>16384||typeof body.action!=='string'||body.action.length>64)throw new ApiError('invalid_input');
     const identity=await authenticate(req);
     client=await platformPool().connect();
-    await client.query('begin');
+    const readOnly=isReadAction(body.action);
+    await client.query(readOnly?'begin read only':'begin');
     await client.query("set local lock_timeout='5s'");
-    const result=await executePlatform(client,identity,body.action,body.data);
+    const result=await executePlatform(readOnly?readContext(client):client,identity,body.action,body.data);
     await client.query('commit');return res.status(200).json(result);
   } catch(e) {
     if(client)await client.query('rollback').catch(()=>{});

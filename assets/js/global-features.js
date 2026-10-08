@@ -1,5 +1,5 @@
 import './platform-global.js';
-import { auth, db, onAuthStateChanged, collection, doc, getDoc, onSnapshot, query, where } from './client.js';
+import { auth, db, onAuthStateChanged, collection, doc, onSnapshot, query, where } from './client.js';
 import { escapeHtml } from './ui.js';
 let stopFollowing = null;
 let stopChannels = null;
@@ -116,10 +116,11 @@ function refreshNotifications() {
         showLiveToast(followedLive[0]);
     }
 }
-async function addAdminLink(nav, uid) {
+function addAdminLink(nav, user) {
     try {
-        const adminSnap = await getDoc(doc(db, 'admins', uid));
-        if (!adminSnap.exists() || adminSnap.data().active !== true)
+        // Navigation hint from auth.identity; every admin action is still
+        // independently authorized against PostgreSQL on the server.
+        if (user.admin !== true)
             return;
         if (document.querySelector('#admin-nav'))
             return;
@@ -163,7 +164,7 @@ onAuthStateChanged(auth, async (user) => {
     }
     activeUid = user.uid;
     ensureNotificationButton(nav);
-    addAdminLink(nav, user.uid);
+    addAdminLink(nav, user);
     stopFollowing = onSnapshot(collection(db, 'users', user.uid, 'following'), snap => {
         followingIds = new Set(snap.docs.map(item => item.id));
         refreshNotifications();

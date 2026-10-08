@@ -120,8 +120,9 @@ export async function refreshSession() {
             return;
         candidate.uid = result.uid ?? candidate.uid;
         candidate.enrollmentRequired = result.enrollmentRequired === true;
+        candidate.admin = result.admin === true;
         candidate.providerData = result.provider ? [{ providerId: result.provider === 'google' ? 'google.com' : 'password' }] : [];
-        const changed = !loaded || previous?.uid !== candidate.uid || previous?.emailVerified !== candidate.emailVerified;
+        const changed = !loaded || previous?.uid !== candidate.uid || previous?.emailVerified !== candidate.emailVerified || previous?.admin !== candidate.admin;
         loaded = true;
         if (changed)
             notify();

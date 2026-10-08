@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "outputDirectory": "public",
+  "regions": ["gru1"],
   "cleanUrls": false,
   "trailingSlash": false,
   "headers": [
