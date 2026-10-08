@@ -1,6 +1,7 @@
-import { auth, db, onAuthStateChanged, collection, query, where, onSnapshot, getDocs, getProfile, selectStream } from './client.js';
+import { auth, db, onAuthStateChanged, collection, getDocs, getProfile, selectStream } from './client.js';
 import { header, footer, liveCard, liveMeta, categories, icons, escapeHtml } from './ui.js';
 import { initialLives } from './home-data.js';
+import { watchPublicLiveFeed } from './live-feed-source.js';
 import { getPlatformPreferences, watchFollowedCategories, recommendationScore, filterMature } from './platform-core.js';
 header('inicio');
 footer();
@@ -8,7 +9,8 @@ const featured = document.querySelector('#featured');
 const liveNow = document.querySelector('#live-now');
 const cats = document.querySelector('#home-categories');
 let user = null;
-let preferences = { hideMatureContent: false, safeMode: false };
+// Until private preferences arrive, only display the safe public feed.
+let preferences = { hideMatureContent: true, safeMode: true };
 let following = new Set();
 let followedCategories = new Set();
 let recentStreamers = new Set();
@@ -34,7 +36,10 @@ function ensurePersonalizedSection() {
     container?.appendChild(section);
     return section;
 }
+let contextGeneration = 0;
 async function loadContext() {
+    const version = ++contextGeneration;
+    const owner = user;
     following = new Set();
     recentStreamers = new Set();
     stopCategories?.();
@@ -44,16 +49,19 @@ async function loadContext() {
         followedCategories = new Set();
         return;
     }
-    preferences = await getPlatformPreferences(user.uid).catch(() => preferences);
-    const [followingSnap, historySnap] = await Promise.all([
-        getDocs(collection(db, 'users', user.uid, 'following')).catch(() => null),
-        getDocs(collection(db, 'users', user.uid, 'watchHistory')).catch(() => null)
+    const [nextPreferences, followingSnap, historySnap] = await Promise.all([
+        getPlatformPreferences(owner.uid).catch(() => ({hideMatureContent:true,safeMode:true})),
+        getDocs(collection(db, 'users', owner.uid, 'following')).catch(() => null),
+        getDocs(collection(db, 'users', owner.uid, 'watchHistory')).catch(() => null)
     ]);
+    if (version !== contextGeneration || user !== owner) return;
+    preferences = nextPreferences;
     following = new Set(followingSnap?.docs?.map(item => item.id) || []);
     const history = historySnap?.docs?.map(item => item.data()) || [];
     history.sort((a, b) => (b.watchedAt?.seconds || 0) - (a.watchedAt?.seconds || 0));
     recentStreamers = new Set(history.slice(0, 12).map(item => item.streamerUid).filter(Boolean));
-    stopCategories = watchFollowedCategories(user.uid, value => {
+    stopCategories = watchFollowedCategories(owner.uid, value => {
+        if (version !== contextGeneration) return;
         followedCategories = value;
         renderLives();
     }, () => { });
@@ -158,13 +166,13 @@ function applyLives(base, generation) {
     lives = base.map(data => {
         const item = { ...data, viewerCount: Math.max(0, Number(data.viewerCount || 0)) };
         const profile = profiles.get(item.streamerUid);
-        return { ...item, username: profile?.username || 'Streamer', photoURL: profile?.photoURL || '' };
+        return { ...item, username: profile?.username || item.username || 'Streamer', photoURL: profile?.photoURL || item.photoURL || '' };
     });
     // Discover thumbnails immediately; profile requests must not block the cards.
     livesReady = true;
     renderLives();
     for (const uid of new Set(lives.map(item => item.streamerUid))) {
-        if (profiles.has(uid))
+        if (profiles.has(uid) || base.some(item => item.streamerUid === uid && item.username))
             continue;
         if (!pendingProfiles.has(uid)) {
             pendingProfiles.set(uid, getProfile(uid).then(profile => {
@@ -199,21 +207,22 @@ function startLives() {
                 applyLives(base, generation);
         });
     }
-    stopLive = onSnapshot(query(collection(db, 'streams'), where('status', '==', 'live')), snap => {
+    stopLive = watchPublicLiveFeed({onData: items => {
         receivedSnapshot = true;
-        applyLives(snap.docs.map(d => ({ id: d.id, ...d.data() })), generation);
-    }, () => {
+        applyLives(items, generation);
+    }, onError: () => {
         if (livesReady)
             return;
         livesReady = true;
         renderGrid(featured, [], 3, 'Não foi possível carregar as lives.');
         renderGrid(liveNow, [], 4, 'Não foi possível carregar as lives.');
-    });
+    }});
 }
+startLives();
 onAuthStateChanged(auth, async (current) => {
     user = current;
+    preferences = {hideMatureContent:true,safeMode:true};
     await loadContext();
-    startLives();
     renderLives();
 });
 window.addEventListener('pagehide', () => { ++liveGeneration; stopLive?.(); stopCategories?.(); });

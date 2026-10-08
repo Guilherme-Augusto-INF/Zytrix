@@ -170,7 +170,7 @@ async function revokePenalty(uid) {
 }
 async function loadDashboard() {
     root.innerHTML = '<div class="state">Carregando dados administrativos...</div>';
-    const [usersSnap, profilesSnap, channelsSnap, streamsSnap, walletsSnap, ordersSnap, categoriesSnap, penaltiesSnap, actionsSnap] = await Promise.all([
+    const [usersSnap, profilesSnap, channelsSnap, streamsSnap, walletsSnap, ordersSnap, categoriesSnap, penaltiesSnap, actionsSnap, moderation] = await Promise.all([
         safeCollection(['users']),
         safeCollection(['profiles']),
         safeCollection(['channels']),
@@ -179,7 +179,8 @@ async function loadDashboard() {
         safeCollection(['zyCoinOrders']),
         safeCollection(['categories']),
         safeCollection(['moderationPenalties']),
-        safeCollection(['moderationActions'])
+        safeCollection(['moderationActions']),
+        moderationSnapshot([])
     ]);
     const users = usersSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
     const profiles = new Map((profilesSnap?.docs || []).map(item => [item.id, item.data()]));
@@ -191,7 +192,6 @@ async function loadDashboard() {
     const penalties = penaltiesSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
     const actions = actionsSnap?.docs.map(item => ({ id: item.id, ...item.data() })) || [];
     const liveStreams = streams.filter(item => item.status === 'live');
-    const moderation = await moderationSnapshot(streams);
     const totalCoins = wallets.reduce((sum, item) => sum + Number(item.balance || 0), 0);
     const activePenalties = penalties.filter(item => penaltyStatus(item) === 'Ativa');
     const recentUsers = [...users]

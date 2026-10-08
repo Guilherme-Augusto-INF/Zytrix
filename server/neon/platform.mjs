@@ -4,6 +4,7 @@ import {deleteAccount} from './account-lifecycle.mjs';
 import { safeStreamingUrl } from '../../assets/js/security.js';
 import { parseStreamingSource } from '../../assets/js/streaming.js';
 import {executeModules} from './modules.mjs';
+import {actorReads} from './read-context.mjs';
 
 export class ApiError extends Error {
   constructor(code, status = 400) { super(code); this.code = code; this.status = status; }
@@ -15,15 +16,20 @@ const key = value => typeof value === 'string' && /^[A-Za-z0-9_-]{16,100}$/.test
 export async function actor(c, identity, verified = false) {
   if (!identity) fail('authentication_required', 401);
   if (verified && !identity.emailVerified) fail('verified_email_required', 403);
-  if(identity.authProvider==='neon')await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['account:'+identity.subject]);
   if(identity.authProvider!=='neon')fail('authentication_required',401);
-  const r=await c.query(`select i.id,exists(select 1 from public.admins adm where adm.user_id=i.id and adm.active) as admin from public.identities i join public.user_accounts a on a.user_id=i.id join neon_auth."user" n on n.id=i.id where i.id=$1::uuid and a.disabled_at is null and not coalesce(n.banned,false)`,[identity.subject]);
+  const cached=actorReads(c);
+  if(cached?.has(identity.subject))return cached.get(identity.subject);
+  // Readers can run together; account deletion and every mutation retain the
+  // exclusive lock, so no read can race an in-flight account mutation.
+  await c.query(cached?'select pg_advisory_xact_lock_shared(hashtextextended($1,0))':'select pg_advisory_xact_lock(hashtextextended($1,0))',['account:'+identity.subject]);
+  const r=await c.query(`select i.id,exists(select 1 from public.admins adm where adm.user_id=i.id and adm.active and adm.revoked_at is null) as admin from public.identities i join public.user_accounts a on a.user_id=i.id join neon_auth."user" n on n.id=i.id where i.id=$1::uuid and a.disabled_at is null and not coalesce(n.banned,false)`,[identity.subject]);
   if (!r.rowCount) fail('profile_not_found', 403);
   const user = r.rows[0];
   const penalty = await c.query(`select type from public.moderation_penalties where user_id=$1 and active
     and (expires_at is null or expires_at>now())`, [user.id]);
   if (penalty.rows.some(p => p.type === 'ban')) fail('account_restricted', 403);
   user.muted = penalty.rows.some(p => p.type === 'mute');
+  cached?.set(identity.subject,user);
   return user;
 }
 async function live(c, publicId, user = null, lock = false) {
