@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import pg from 'pg';import sharp from 'sharp';
+import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {randomUUID} from 'node:crypto';import pg from 'pg';import sharp from 'sharp';
 import {replaceImage,removeImage,cleanupImages,transaction,imageTarget} from '../server/neon/images.mjs';import {executePlatform} from '../server/neon/platform.mjs';import {IMAGE_HOST} from '../assets/js/image-policy.js';
 test('images: restricted PostgreSQL role, non-admin ownership, replacement, deletion, failures and concurrency',{skip:!process.env.IMAGE_TEST_DATABASE_URL_FILE},async()=>{
  const url=new URL((await readFile(process.env.IMAGE_TEST_DATABASE_URL_FILE,'utf8')).trim());assert.ok(!url.hostname.startsWith('ep-icy-night-b6fvg1ni'));url.search='';const pool=new pg.Pool({connectionString:url.toString(),ssl:{rejectUnauthorized:true},max:4});
@@ -15,8 +15,17 @@ test('images: restricted PostgreSQL role, non-admin ownership, replacement, dele
  await assert.rejects(transaction(pool,c=>executePlatform(c,identity,'documents.write',{path:['profiles',subject],operation:'update',data:{photoURL:first.url}})),e=>e.code==='image_action_required');
  await assert.rejects(transaction(pool,c=>executePlatform(c,identity,'documents.write',{path:['profiles','00000000-0000-4000-8000-000000000000'],operation:'update',data:{photoURL:second.url}})),e=>e.status===403);
  const thumb=await replaceImage({...base,kind:'thumbnail',liveId:subject});assert.equal((await pool.query('select thumbnail_url from public.lives where public_id=$1',[subject])).rows[0].thumbnail_url,thumb.url);assert.equal(files.size,2);
- await transaction(pool,c=>executePlatform(c,identity,'documents.write',{path:['clips','image-test-clip'],operation:'set',data:{streamId:subject,title:'Image reference test',momentSeconds:0}}));
- const newerThumb=await replaceImage({...base,kind:'thumbnail',liveId:subject});assert.equal((await pool.query("select thumbnail_url from public.clips where public_id='image-test-clip'")).rows[0].thumbnail_url,newerThumb.url);
+ const clipId='image-test-'+randomUUID();
+ await transaction(pool,c=>executePlatform(c,identity,'documents.write',{path:['clips',clipId],operation:'set',data:{streamId:subject,title:'Image reference test',momentSeconds:0}}));
+ const viewer=await pool.connect();let replacement;
+ try{
+ await viewer.query('begin');await viewer.query('select id from public.lives where public_id=$1 for update',[subject]);let settled=false;
+ replacement=replaceImage({...base,kind:'thumbnail',liveId:subject}).finally(()=>{settled=true;});
+ await viewer.query('select pg_sleep(0.15)');assert.equal(settled,false);
+ await viewer.query(`insert into public.clips(public_id,live_id,streamer_id,creator_id,title,moment_seconds,source_url,thumbnail_url,mature_content,visibility) select $1,live_id,streamer_id,creator_id,title,moment_seconds,source_url,thumbnail_url,mature_content,visibility from public.clips where public_id=$2`,[clipId+'-race',clipId]);
+ await viewer.query('commit');
+ }finally{await viewer.query('rollback').catch(()=>{});viewer.release();}
+ const newerThumb=await replacement;for(const id of [clipId,clipId+'-race'])assert.equal((await pool.query('select thumbnail_url from public.clips where public_id=$1',[id])).rows[0].thumbnail_url,newerThumb.url);
  await assert.rejects(replaceImage({...base,kind:'profile',storage:{...storage,put:async()=>{throw Error('storage failure');}}}),/storage failure/);assert.equal((await pool.query('select photo_url from public.profiles where user_id=$1',[subject])).rows[0].photo_url,second.url);
  failDelete=true;await removeImage({...base,kind:'profile'});assert.equal((await pool.query('select photo_url from public.profiles where user_id=$1',[subject])).rows[0].photo_url,'');assert.ok((await pool.query("select 1 from private.image_assets where state='delete_pending'")).rowCount>0);
  failDelete=false;await cleanupImages(pool,storage);assert.equal(files.size,1);

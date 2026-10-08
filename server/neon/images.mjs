@@ -8,7 +8,7 @@ export async function transaction(pool,fn){const c=await pool.connect();try{awai
 export async function imageTarget(c,identity,kind,liveId){
  const u=await actor(c,identity,true);
  if(kind==='profile'&&!liveId){if(!(await c.query('select 1 from public.profiles where user_id=$1',[u.id])).rowCount)throw new ApiError('profile_not_found',403);return {owner:u.id,live:null};}
- if(kind==='thumbnail'&&typeof liveId==='string'&&liveId.length<=128){const l=(await c.query(`select l.id from public.lives l join public.channels ch on ch.id=l.channel_id where l.public_id=$1 and l.owner_id=$2 and ch.owner_id=$2 and l.deleted_at is null and ch.deleted_at is null`,[liveId,u.id])).rows[0];if(!l)throw new ApiError('forbidden',403);return {owner:u.id,live:l.id};}
+ if(kind==='thumbnail'&&typeof liveId==='string'&&liveId.length<=128){const l=(await c.query(`select l.id from public.lives l join public.channels ch on ch.id=l.channel_id where l.public_id=$1 and l.owner_id=$2 and ch.owner_id=$2 and l.deleted_at is null and ch.deleted_at is null for update of l`,[liveId,u.id])).rows[0];if(!l)throw new ApiError('forbidden',403);return {owner:u.id,live:l.id};}
  throw new ApiError('invalid_input');
 }
 export async function cleanupImages(pool,storage=blobStorage,owner=null){
@@ -25,6 +25,7 @@ export async function cleanupImages(pool,storage=blobStorage,owner=null){
 }
 async function updateDerivedReferences(c,target,kind,url){
  const slot="select url from private.image_assets where owner_id=$1 and kind=$2 and live_id is not distinct from $3::uuid and state='active'";
+ if(kind==='profile')await c.query(`select id from public.lives where owner_id=$1 and thumbnail_url in(${slot}) order by id for update`,[target.owner,kind,target.live]);
  // Clips and the original channel-creation flow can inherit an image reference.
  // Move those references atomically before removing the old object.
  await c.query(`update public.clips set thumbnail_url=$4 where streamer_id=$1 and thumbnail_url in(${slot})`,[target.owner,kind,target.live,url]);
