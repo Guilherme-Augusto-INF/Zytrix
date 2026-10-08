@@ -1,3 +1,5 @@
+// Broken images retain their reserved geometry and use a local fallback.
+document.addEventListener('error',event=>{const img=event.target;if(img instanceof HTMLImageElement&&!img.closest('.image-upload')&&img.getAttribute('src')!=='assets/img/placeholder.svg')img.src='assets/img/placeholder.svg';},true);
 import { headerMarkup, footerMarkup } from './site-shell.js';
 import { auth, onAuthStateChanged } from './client.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';

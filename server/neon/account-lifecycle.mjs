@@ -15,6 +15,7 @@ export async function deleteAccount(c,identity,data) {
  await c.query(`insert into private.account_deletion_evidence(user_id,entity_type,entity_id,evidence)
  select $1,'chat',id::text,to_jsonb(m) from public.chat_messages m where sender_id=$1
  on conflict do nothing`,[user]);
+ await c.query("update private.image_assets set state='delete_pending',updated_at=now() where owner_id=$1 and state in('pending','active')",[user]);
  await c.query('update public.user_accounts set disabled_at=now(),deleted_at=now() where user_id=$1',[user]);
  await c.query('update public.profiles set username=$2,bio=\'\',photo_url=\'\' where user_id=$1',[user,'gone_'+user.replaceAll('-','').slice(0,24)]);
  await c.query("update public.lives set status=case when status='live' then 'ended' else status end,ended_at=coalesce(ended_at,now()),deleted_at=now(),visibility='private',title='Conteúdo removido',description='',playback_url='',thumbnail_url='',vod_url=null,raid_target_live_id=null,host_target_live_id=null where owner_id=$1",[user]);

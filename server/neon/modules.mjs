@@ -1,3 +1,4 @@
+import {managedImageUrl} from '../../assets/js/image-policy.js';
 import {randomUUID} from 'node:crypto';
 import {ApiError} from './platform.mjs';
 import {safeImageUrl,safeStreamingUrl,safeSocialUrl} from '../../assets/js/security.js';
@@ -243,9 +244,9 @@ async function writeDocument(c,identity,data,ctx) {
  const owned=value=>{if(value!==u.id)fail('forbidden',403);};
  if(kind==='wallets'||kind==='zyCoinTransactions'||kind==='zyCoinOrders')fail('financial_action_required',403);
  if(kind==='profiles'){owned(identifier);if(deleting)fail('account_deletion_not_enabled',409);
-  const old=await one(c,'select username,bio from public.profiles where user_id=$1',[u.id]);if(!old)fail('profile_missing',404);
+  const old=await one(c,'select username,bio,photo_url from public.profiles where user_id=$1',[u.id]);if(!old)fail('profile_missing',404);
   await ctx.executePlatform(c,identity,'profile.update',{username:patch.username??old.username,bio:patch.bio??old.bio,name:patch.name});
-  if(patch.photoURL!==undefined){const url=str(patch.photoURL,2048);if(url&&!safeImageUrl(url))fail('invalid_photo_url');await c.query('update public.profiles set photo_url=$2 where user_id=$1',[u.id,url]);}return {saved:true};
+  if(patch.photoURL!==undefined){const url=str(patch.photoURL,2048);if(url&&!safeImageUrl(url))fail('invalid_photo_url');if(url!==old.photo_url&&(managedImageUrl(url)||managedImageUrl(old.photo_url)))fail('image_action_required',409);await c.query('update public.profiles set photo_url=$2 where user_id=$1',[u.id,url]);}return {saved:true};
  }
  if(kind==='users'){owned(identifier);if(sub==='notificationState')return ctx.executePlatform(c,identity,'notifications.seen',{type:child});fail('account_action_required',403);}
  if(kind==='channels') {
@@ -256,7 +257,7 @@ async function writeDocument(c,identity,data,ctx) {
    else if(patch.channelName!==undefined||patch.description!==undefined)await ctx.executePlatform(c,identity,'channel.save',{name:patch.channelName??old.name,slug:old.slug,description:patch.description??old.description,visibility:old.visibility});
    const channel=await ownChannel(c,u,identifier);
    if(patch.categoryId!==undefined){const category=str(patch.categoryId,120,1);if(!await one(c,'select id from public.categories where active and (id=$1 or name=$1)',[category]))fail('invalid_category');await c.query('update public.channels set category_id=(select id from public.categories where active and (id=$2 or name=$2) order by id limit 1) where id=$1',[channel.id,category]);}
-   for(const [name,column]of [['avatarURL','avatar_url'],['bannerURL','banner_url']])if(patch[name]!==undefined){const value=str(patch[name],2048);if(value&&!safeImageUrl(value))fail('invalid_image_url');await c.query(`update public.channels set ${column}=$2 where id=$1`,[channel.id,value]);}
+   for(const [name,column]of [['avatarURL','avatar_url'],['bannerURL','banner_url']])if(patch[name]!==undefined){const value=str(patch[name],2048);if(value&&!safeImageUrl(value))fail('invalid_image_url');if(value!==channel[column]&&(managedImageUrl(value)||managedImageUrl(channel[column])))fail('image_action_required',409);await c.query(`update public.channels set ${column}=$2 where id=$1`,[channel.id,value]);}
    return {saved:true}; // Live state is changed only by live.state, which updates both tables atomically.
   }
   const channel=await ownChannel(c,u,identifier);
@@ -278,7 +279,7 @@ async function writeDocument(c,identity,data,ctx) {
   else l=await ctx.live(c,identifier,u,true);
   if(!sub){if(l.owner_id!==u.id)fail('forbidden',403);if(deleting)fail('live_deletion_not_enabled',409);
    const fields={title:['title',120,1],description:['description',2000,0],thumbnailURL:['thumbnail_url',2048,0],playbackURL:['playback_url',2048,1],vodURL:['vod_url',2048,0],supportGoalLabel:['support_goal_label',60,0],supportAlertSound:['support_alert_sound',16,0],supportAlertTheme:['support_alert_theme',16,0]};
-   for(const [name,[column,max,min]]of Object.entries(fields))if(patch[name]!==undefined){const value=str(patch[name],max,min);if((name==='playbackURL'||name==='vodURL')&&value&&!safeStreamingUrl(value))fail('invalid_playback_url');if(name==='thumbnailURL'&&value&&!safeImageUrl(value))fail('invalid_thumbnail_url');if(name==='supportAlertSound'&&!['coin','bell','pop','soft','none'].includes(value))fail('invalid_input');if(name==='supportAlertTheme'&&!['classic','minimal','celebrate','neon'].includes(value))fail('invalid_input');await c.query(`update public.lives set ${column}=$2 where id=$1`,[l.id,value]);}
+   for(const [name,[column,max,min]]of Object.entries(fields))if(patch[name]!==undefined){const value=str(patch[name],max,min);if((name==='playbackURL'||name==='vodURL')&&value&&!safeStreamingUrl(value))fail('invalid_playback_url');if(name==='thumbnailURL'&&value&&!safeImageUrl(value))fail('invalid_thumbnail_url');if(name==='thumbnailURL'&&value!==l.thumbnail_url&&(managedImageUrl(value)||managedImageUrl(l.thumbnail_url)))fail('image_action_required',409);if(name==='supportAlertSound'&&!['coin','bell','pop','soft','none'].includes(value))fail('invalid_input');if(name==='supportAlertTheme'&&!['classic','minimal','celebrate','neon'].includes(value))fail('invalid_input');await c.query(`update public.lives set ${column}=$2 where id=$1`,[l.id,value]);}
    for(const [name,column,min,max]of [['supportGoalCoins','support_goal_coins',0,10000000],['supportAlertMinCoins','support_alert_min_coins',1,100000],['supportAlertDurationMs','support_alert_duration_ms',2500,10000]])if(patch[name]!==undefined)await c.query(`update public.lives set ${column}=$2 where id=$1`,[l.id,integer(patch[name],min,max)]);
    if(patch.matureContent!==undefined){if(typeof patch.matureContent!=='boolean')fail('invalid_input');await c.query('update public.lives set mature_content=$2 where id=$1',[l.id,patch.matureContent]);}
    if(patch.categoryId!==undefined){const category=str(patch.categoryId,120,1);if(!await one(c,'select id from public.categories where active and (id=$1 or name=$1)',[category]))fail('invalid_category');await c.query('update public.lives set category_id=(select id from public.categories where active and (id=$2 or name=$2) order by id limit 1) where id=$1',[l.id,category]);}

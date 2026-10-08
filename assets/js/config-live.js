@@ -1,3 +1,4 @@
+import {imageUploadMarkup,mountImageUpload} from './image-upload.js';
 import { auth, db, onAuthStateChanged, doc, getDoc, getDocs, query, collection, where, limit, updateDoc, serverTimestamp, writeBatch, ensureWallet } from './client.js';
 import { header, footer, categories, escapeAttr, escapeHtml } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
@@ -8,6 +9,7 @@ footer();
 const root = document.querySelector('#config-root');
 let user = null;
 let stream = null;
+let disposeImageUpload=()=>{};
 let channel = null;
 async function load() {
     const channelSnap = await getDoc(doc(db, 'channels', user.uid));
@@ -40,6 +42,7 @@ async function load() {
     render();
 }
 function render() {
+    disposeImageUpload();
     const categoryParts = String(stream.categoryId || 'Just Chatting').split(' - ');
     const mainCategory = categoryParts[0] || 'Just Chatting';
     const currentSubcategory = categoryParts.length > 1
@@ -72,19 +75,7 @@ function render() {
             >${escapeHtml(stream.description || '')}</textarea>
           </div>
 
-          <div class="form-group">
-            <label for="thumbnail">Thumbnail URL</label>
-            <input
-              id="thumbnail"
-              class="input"
-              type="url"
-              maxlength="2048"
-              placeholder="https://i.ytimg.com/vi/ID/maxresdefault.jpg"
-              value="${escapeAttr(stream.thumbnailURL || '')}"
-              autocomplete="url"
-            >
-            <small class="muted">Informe uma URL HTTPS direta de imagem pública de um provedor compatível: Google, YouTube, Twitch, Kick ou provedores de imagem permitidos.</small>
-          </div>
+          ${imageUploadMarkup({id:'live-image-upload',kind:'thumbnail',url:stream.thumbnailURL})}
 
           <div class="form-group">
             <label for="playback-url">Canal de transmissão</label>
@@ -222,19 +213,14 @@ function render() {
                 : '<div class="message err">O navegador bloqueou o áudio. Clique novamente após interagir com a página.</div>';
         }
     });
+    disposeImageUpload=mountImageUpload({id:'live-image-upload',kind:'thumbnail',liveId:stream.id,url:stream.thumbnailURL,onSaved:url=>{stream.thumbnailURL=url;}});
     document.querySelector('#save').onclick = save;
     document.querySelector('#toggle-live').onclick = toggle;
 }
 function collectForm({ requireSubcategory = false } = {}) {
     const title = document.querySelector('#title').value.trim();
     const description = document.querySelector('#description').value.trim();
-    const rawThumbnail = document.querySelector('#thumbnail').value.trim();
-    const thumbnailURL = safeImageUrl(rawThumbnail);
-    if (rawThumbnail && !thumbnailURL) {
-        return {
-            error: 'Thumbnail inválida: use uma URL HTTPS direta de imagem pública de Google, YouTube, Twitch, Kick ou provedores de imagem permitidos. Links de sites arbitrários não são permitidos.'
-        };
-    }
+    const thumbnailURL = safeImageUrl(stream.thumbnailURL || '');
     const category = document.querySelector('#category').value;
     const subcategory = document.querySelector('#subcategory').value;
     const source = parseStreamingSource(document.querySelector('#playback-url').value);
