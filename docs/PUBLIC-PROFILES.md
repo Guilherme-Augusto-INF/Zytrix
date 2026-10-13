@@ -25,3 +25,14 @@ Public profile pages deliberately remain `noindex,follow`: no profile-indexing p
 
 ## Release gate
 Keep PR unmerged until preview and authenticated regression checks are complete. Production requires user authorization. Rollback: revert feature commit; no data rollback needed. Follow state is a channel relation, not a new user-follow model.
+
+## Preview evidence (2026-10-13)
+- Feature commit: 125de8779deb7b491bb3dacf2fb0720518330e0c; preview deployment dpl_DCFJixk1hTYZCZozNqccQ1vYanYc, READY. Browser URL: https://zytrix-24jv9n49k-guilhermeaugusto2525-1431.vercel.app/usuario.html?uid=5f2da840-1097-469d-b442-10d089153186 . Vercel authentication protects previews; temporary access used for QA, protection retained.
+- Initial preview lacked Neon variables and returned 503 neon_not_configured. Resolved using branch-scoped Preview DATABASE_URL (restricted zytrix_runtime role) and pinned public auth issuer. No production variables changed.
+- Isolated DB: preview-public-profiles-pr31-20261013 (br-lingering-hall-b6hxomon), parent clean-neon-20261007; expires 2026-10-20 16:30 UTC. No mutations to account, followers, chat, reports or financial records for QA.
+- PASS in browser: existing profile with real avatar/name/live/stats; anonymous API through deployed restricted runtime; direct URL/reload; /usuario alias; missing UUID; malformed UUID; home-card avatar link; live streamer link; profile-to-live navigation and Twitch embed; empty followers/following lists; copy link; login requirement plus safe return URL for follow; report target prefilled and submission disabled without login; browser back; dynamic title/canonical/noindex.
+- Twitch embed loaded but upstream alanzoka was offline, while Zytrix persisted status remained live. Existing status-source behavior, not verified playback of an active broadcast.
+- NOT TESTED live: mobile/tablet viewport, keyboard full flow, chat authors (no messages), populated social lists, disabled/deleted/banned fixtures, absent avatar/long bio/special-character visual fixtures, login/signup/profile editing, follow/unfollow with two accounts and concurrency, expired real session, actual report submission, financial regressions. Unit tests cover input/projection/no-channel/auth/self-follow/pagination/lock structure; they do not substitute for these real flow checks.
+- Three preexisting PostgreSQL integration suites skipped. An extra restricted-runtime PostgreSQL attempt from the Work filesystem failed EAI_AGAIN (network/DNS restriction); runtime public queries were instead validated on the deployed preview.
+- Auth emitter is pinned in current server code to the existing service. This isolated DB does not synchronize newly created parent auth sessions: use a properly isolated QA auth setup before testing authenticated preview flows. No auth architecture rewritten in this feature.
+- PR #31 remains Draft. No merge, production deployment or production smoke test performed.
