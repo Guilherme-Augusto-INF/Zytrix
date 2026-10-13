@@ -24,6 +24,7 @@ jobs:
           from html.parser import HTMLParser
           import json
           import re
+          import subprocess
           import xml.etree.ElementTree as ET
 
           base = 'https://zytrix-lives.vercel.app'
@@ -179,10 +180,10 @@ jobs:
           if verification != 'google-site-verification: google87f94d9d56cacf74.html':
               errors.append('arquivo de verificação do Google foi alterado')
 
-          ui = Path('assets/js/ui.js').read_text(encoding='utf-8')
+          ui = subprocess.check_output(['node', '--input-type=module', '-e', "import {headerMarkup,footerMarkup} from './assets/js/site-shell.js'; console.log(headerMarkup()+footerMarkup());"], text=True)
           for href in ('recursos.html', 'faq.html', 'categorias.html', 'sobre.html'):
               if href not in ui:
-                  errors.append(f'ui.js: link interno ausente para {href}')
+                  errors.append(f'layout compartilhado: link interno ausente para {href}')
 
           if errors:
               raise SystemExit('\n'.join(errors))
