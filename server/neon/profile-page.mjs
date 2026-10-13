@@ -21,9 +21,14 @@ export function profilePageSelector(rawUrl){
   return {data:{username},url,legacy:false};
  }
  if(!['/usuario','/usuario.html','/api/public-profile','/api/public-profile/'].includes(url.pathname))throw new ApiError('profile_not_found',404);
- if(url.searchParams.getAll('uid').length!==1||[...url.searchParams.keys()].some(key=>key!=='uid'))throw new ApiError('profile_not_found',404);
+ if(url.searchParams.getAll('uid').length!==1||[...url.searchParams.keys()].some(key=>!['uid','_vercel_share'].includes(key)))throw new ApiError('profile_not_found',404);
  let uid;try{uid=profileUid(url.searchParams.get('uid'));}catch{throw new ApiError('profile_not_found',404);}
  return {data:{uid},url,legacy:true};
+}
+export function profileQueryNeedsCanonical(url,username){
+ // Vercel preview protection and captured rewrite parameters are not app selectors.
+ // Removing its share parameter causes a self-redirect on protected preview fetches.
+ return [...url.searchParams].some(([key,value])=>key!=='_vercel_share'&&!(key==='username'&&normalizePublicUsername(value)===username));
 }
 export function renderProfileDocument(template,state){
  const p=state.profile,title=`${p.name||p.username} (@${p.username}) — Zytrix`;
@@ -53,7 +58,7 @@ export function createProfilePageHandler({pool=platformPool,enabled=platformEnab
    const state=await publicProfile(c,selector.data);await c.query('commit');
    if(!state.profile)throw new ApiError('profile_not_found',404);
    const canonical=publicProfileUrl(state.profile.username);
-   if(selector.legacy||(selector.url.pathname.startsWith('/@')&&(selector.url.pathname!==canonical||selector.url.search))){
+   if(selector.legacy||(selector.url.pathname.startsWith('/@')&&(selector.url.pathname!==canonical||profileQueryNeedsCanonical(selector.url,selector.data.username)))){
     // Temporary, uncacheable: a username may change later; legacy UUID is stable.
     res.setHeader('Location',canonical);return finish(307,'');
    }

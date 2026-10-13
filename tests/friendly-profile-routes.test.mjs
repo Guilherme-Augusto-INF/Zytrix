@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
 import {publicProfileUrl,profileRouteUsername} from '../assets/js/profile-url.js';
 import {publicProfile,publicFields} from '../server/neon/public-profiles.mjs';
-import {profilePageSelector,renderProfileDocument,createProfilePageHandler} from '../server/neon/profile-page.mjs';
+import {profilePageSelector,profileQueryNeedsCanonical,renderProfileDocument,createProfilePageHandler} from '../server/neon/profile-page.mjs';
 const uid='12345678-1234-4234-8234-123456789012';
 const profile={uid,username:'Streamer_Name-1',name:'<script>alert(1)</script>',photoURL:'',bio:'</script><img src=x onerror=alert(1)>',createdAt:'2026-01-01'};
 const template=readFileSync('usuario.html','utf8');
@@ -18,6 +18,12 @@ test('selectors resolve path identity only and validate legacy UUIDs without ove
  assert.deepEqual(profilePageSelector('/api/public-profile/GUI_1?username=victim').data,{username:'gui_1'});
  assert.deepEqual(profilePageSelector('/usuario.html?uid='+uid.toUpperCase()).data,{uid});
  for(const path of ['/@%2Fadmin','/@%3Cscript%3E','/usuario.html?uid=bad','/usuario.html?uid='+uid+'&uid='+uid,'/usuario.html?uid='+uid+'&next=https://evil.test','/@name/extra'])assert.throws(()=>profilePageSelector(path),e=>e.status===404);
+});
+test('preview protection and matching rewrite capture do not cause redirect loops',()=>{
+ assert.equal(profileQueryNeedsCanonical(new URL('https://fixture.test/@streamer?username=streamer&_vercel_share=fixture'),'streamer'),false);
+ assert.equal(profileQueryNeedsCanonical(new URL('https://fixture.test/@streamer?username=victim'),'streamer'),true);
+ assert.equal(profileQueryNeedsCanonical(new URL('https://fixture.test/@streamer?uid='+uid),'streamer'),true);
+ assert.deepEqual(profilePageSelector('/usuario.html?uid='+uid+'&_vercel_share=fixture').data,{uid});
 });
 test('username resolver is parameterized, filtered, and refuses service without retirement guard',async()=>{
  const c=db([[{ready:true}],[profile],[],[{followers:0,following:0}]]);
