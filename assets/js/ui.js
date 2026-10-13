@@ -1,3 +1,4 @@
+import {escapeHtml,escapeAttr} from './html-escape.js';
 import {safeImageUrl} from './security.js';
 import {publicProfileUrl} from './profile-url.js';
 // Broken images retain their reserved geometry and use a local fallback.
@@ -70,7 +71,7 @@ export function liveCard(live, options = {}) {
 }
 export function liveMeta(live) {
     const initial = (live.username || 'S').charAt(0).toUpperCase();
-    const href=publicProfileUrl(live.streamerUid);
+    const href=publicProfileUrl(live.username);
     return `<div class="live-meta">
         ${href?`<a class="profile-link" href="${escapeAttr(href)}" aria-label="Ver perfil de ${escapeAttr(live.username||'streamer')}">`:''}
         ${live.photoURL
@@ -85,16 +86,5 @@ export function liveMeta(live) {
       </div>
   `;
 }
-export function escapeHtml(value = '') {
-    return String(value).replace(/[&<>'"]/g, character => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        "'": '&#039;',
-        '"': '&quot;'
-    })[character]);
-}
-export function escapeAttr(value = '') {
-    return escapeHtml(value);
-}
+export {escapeHtml,escapeAttr} from './html-escape.js';
 export { categories, icons } from './categories-data.js';

@@ -74,9 +74,34 @@
           "value": "noindex, follow"
         }
       ]
+    },
+    {
+      "source": "/@:username",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, follow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
     }
   ],
   "rewrites": [
+    {
+      "source": "/@:username",
+      "destination": "/api/public-profile/:username"
+    },
+    {
+      "source": "/usuario.html",
+      "destination": "/api/public-profile"
+    },
+    {
+      "source": "/usuario",
+      "destination": "/api/public-profile"
+    },
     {
       "source": "/ao-vivo",
       "destination": "/ao-vivo.html"
@@ -176,10 +201,6 @@
     {
       "source": "/moderacao",
       "destination": "/moderacao.html"
-    },
-    {
-      "source": "/usuario",
-      "destination": "/usuario.html"
     }
   ],
   "buildCommand": "npm run build",
@@ -188,5 +209,10 @@
       "path": "/api/v1/images-cleanup",
       "schedule": "0 7 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/public-profile/*.js": {
+      "includeFiles": "usuario.html"
+    }
+  }
 }
