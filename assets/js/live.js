@@ -2,7 +2,8 @@ import {publicProfileUrl} from './profile-url.js';
 import { platformSource, ownPlatform, financialAction } from './platform-backend.js';
 import { auth, db, onAuthStateChanged, doc, getDoc, onSnapshot, collection, query, orderBy, limit, setDoc, deleteDoc, runTransaction, increment, serverTimestamp, Timestamp, ensureWallet } from './client.js';
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
-import { reportLink } from './report-link.js';
+import { reportLink, reportsAvailable } from './report-link.js';
+import { createChatReportActions } from './chat-report-actions.js';
 import { getStreamingEmbed, streamingPlatformLabel } from './streaming.js';
 import { safeImageUrl } from './security.js';
 header('ao-vivo');
@@ -12,6 +13,7 @@ const streamId = new URLSearchParams(location.search).get('stream') ||
     localStorage.getItem('zytrixSelectedStream') ||
     '';
 const root = document.querySelector('#live-root');
+const chatReportActions = createChatReportActions(root, reportsAvailable);
 let stream = null;
 let streamerProfile = null;
 let user = null;
@@ -410,6 +412,7 @@ function renderChatMessages(messages) {
     const container = document.querySelector('#chat-messages');
     if (!container)
         return;
+    chatReportActions.beforeRender();
     if (!messages.length) {
         container.innerHTML = `
       <div class="chat-empty">
@@ -506,8 +509,7 @@ function renderChatMessages(messages) {
         }
         container.appendChild(article);
         if (!isOwn) {
-            reportLink(article, "chat", message.id, streamId, "append");
-            reportLink(article, "profile", message.uid, "-", "append");
+            chatReportActions.add(article, message.id, message.uid, streamId);
         }
     }
     container.scrollTop = container.scrollHeight;
