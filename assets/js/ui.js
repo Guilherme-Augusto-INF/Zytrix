@@ -1,3 +1,4 @@
+import {publicProfileUrl} from './profile-url.js';
 // Broken images retain their reserved geometry and use a local fallback.
 document.addEventListener('error',event=>{const img=event.target;if(img instanceof HTMLImageElement&&!img.closest('.image-upload')&&img.getAttribute('src')!=='assets/img/placeholder.svg')img.src='assets/img/placeholder.svg';},true);
 import { headerMarkup, footerMarkup } from './site-shell.js';
@@ -15,7 +16,7 @@ export function header(active = '') {
         if (!guest || !profile)
             return;
         if (user) {
-            if(user.enrollmentRequired&&!document.querySelector('[data-auth-form]')&&!location.pathname.endsWith('/sair.html')){location.replace('login.html?redirect='+encodeURIComponent(location.pathname+location.search));return;}
+            if(user.enrollmentRequired&&!document.body.hasAttribute('data-public-profile')&&!document.querySelector('[data-auth-form]')&&!location.pathname.endsWith('/sair.html')){location.replace('login.html?redirect='+encodeURIComponent(location.pathname+location.search));return;}
             guest.classList.add('hidden');
             profile.classList.remove('hidden');
         }
@@ -68,13 +69,15 @@ export function liveCard(live, options = {}) {
 }
 export function liveMeta(live) {
     const initial = (live.username || 'S').charAt(0).toUpperCase();
+    const href=publicProfileUrl(live.streamerUid);
     return `<div class="live-meta">
+        ${href?`<a class="profile-link" href="${escapeAttr(href)}" aria-label="Ver perfil de ${escapeAttr(live.username||'streamer')}">`:''}
         ${live.photoURL
         ? `<img width="34" height="34" class="avatar" src="${escapeAttr(live.photoURL)}" alt="Foto de ${escapeAttr(live.username || 'streamer')}">`
         : `<span class="avatar">${escapeHtml(initial)}</span>`}
 
-        <div>
-          <div class="live-title">${escapeHtml(live.username || 'Streamer')}</div>
+        ${href?'</a>':''}<div>
+          <div class="live-title">${href?`<a class="profile-link" href="${escapeAttr(href)}">${escapeHtml(live.username || 'Streamer')}</a>`:escapeHtml(live.username || 'Streamer')}</div>
           <div class="live-sub">${escapeHtml(live.title || 'Transmissão ao vivo')}</div>
           <div class="live-cat">${escapeHtml(live.categoryId || '')}</div>
         </div>

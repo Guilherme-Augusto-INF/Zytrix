@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 
+import {publicProfile, publicNetwork, activeProfileFilter} from './public-profiles.mjs';
 import {deleteAccount} from './account-lifecycle.mjs';
 import { safeStreamingUrl } from '../../assets/js/security.js';
 import { parseStreamingSource } from '../../assets/js/streaming.js';
@@ -316,14 +317,16 @@ export async function executePlatform(c, identity, action, data = {}) {
       if((await c.query("select 1 from public.live_reactions where live_id=$1 and user_id=$2 and created_at>now()-interval '2 seconds'",[l.id,u.id])).rowCount)fail('rate_limited',429);
       await c.query("insert into public.live_reactions(live_id,user_id,emoji,expires_at) values($1,$2,$3,now()+interval '10 minutes')",[l.id,u.id,data.emoji]);return {sent:true};
     }
+    case 'profile.public': return publicProfile(c,data);
+    case 'profile.network': return publicNetwork(c,data);
     case 'profile.search': {
       const query=text(data.query?.trim(),1,80);
-      const r=await c.query(`select p.user_id::text as uid,p.name,p.username,p.photo_url as "photoURL",p.bio from public.profiles p join public.user_accounts a on a.user_id=p.user_id where a.deleted_at is null and strpos(lower(p.username||' '||p.name),lower($1))>0 order by p.username limit 40`,[query]);
+      const r=await c.query(`select p.user_id::text as uid,p.name,p.username,p.photo_url as "photoURL",p.bio from public.profiles p join public.user_accounts a on a.user_id=p.user_id where ${activeProfileFilter('p.user_id')} and strpos(lower(p.username||' '||p.name),lower($1))>0 order by p.username limit 40`,[query]);
       return {profiles:r.rows};
     }
     case 'profile.get': {
       const r = await c.query(`select i.id::text as uid,p.name,p.username,p.photo_url as "photoURL",p.bio,p.created_at as "createdAt"
-        from public.profiles p join public.identities i on i.id=p.user_id where i.id::text=$1 and not exists(select 1 from public.user_accounts a where a.user_id=i.id and a.deleted_at is not null)`, [id(data.uid)]);
+        from public.profiles p join public.identities i on i.id=p.user_id where i.id::text=$1 and ${activeProfileFilter('i.id')}`, [id(data.uid)]);
       return { profile:r.rows[0]??null };
     }
     case 'me': {
@@ -432,7 +435,8 @@ export async function executePlatform(c, identity, action, data = {}) {
     }
     case 'follow.set': {
       const u=await actor(c,identity,true);if(typeof data.following!=='boolean')fail('invalid_input');
-      const row=(await c.query("select id,owner_id from public.channels where public_id=$1 and deleted_at is null and visibility='public'",[id(data.channelId)])).rows[0];if(!row||row.owner_id===u.id)fail('invalid_channel');
+      const row=(await c.query(`select id,owner_id from public.channels where public_id=$1 and deleted_at is null and visibility='public' and ${activeProfileFilter('owner_id')} for share`,[id(data.channelId)])).rows[0];if(!row||row.owner_id===u.id)fail('invalid_channel');
+      await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['follow:'+u.id+':'+row.id]);
       if(data.following)await c.query('insert into public.follows(follower_id,channel_id) values($1,$2) on conflict do nothing',[u.id,row.id]);
       else await c.query('delete from public.follows where follower_id=$1 and channel_id=$2',[u.id,row.id]);return {following:data.following};
     }

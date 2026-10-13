@@ -147,7 +147,8 @@ function renderGrid(element, items, count, message) {
 }
 function bindCards() {
     document.querySelectorAll('.live-card').forEach(card => {
-        card.onclick = () => {
+        card.onclick = event => {
+            if(event.target.closest('a,button'))return;
             const live = lives.find(item => item.id === card.dataset.liveId);
             if (!live)
                 return;

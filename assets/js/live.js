@@ -1,3 +1,4 @@
+import {publicProfileUrl} from './profile-url.js';
 import { platformSource, ownPlatform, financialAction } from './platform-backend.js';
 import { auth, db, onAuthStateChanged, doc, getDoc, onSnapshot, collection, query, orderBy, limit, setDoc, deleteDoc, runTransaction, increment, serverTimestamp, Timestamp, ensureWallet } from './client.js';
 import { header, footer, escapeHtml, escapeAttr } from './ui.js';
@@ -203,12 +204,12 @@ function render() {
               <h1 style="margin:8px 0">${escapeHtml(stream.title || 'Transmissão')}</h1>
               <p class="muted">${escapeHtml(stream.description || '')}</p>
 
-              <div style="display:flex;align-items:center;gap:9px">
+              <a class="profile-link" href="${escapeAttr(publicProfileUrl(stream.streamerUid))}" style="display:flex;align-items:center;gap:9px">
                 ${streamerProfile?.photoURL
         ? `<img class="avatar" src="${escapeAttr(safeImageUrl(streamerProfile.photoURL))}" referrerpolicy="no-referrer" alt="${escapeHtml(username)}">`
         : `<span class="avatar">${escapeHtml(username.charAt(0).toUpperCase())}</span>`}
                 <strong>${escapeHtml(username)}</strong>
-              </div>
+              </a>
             </div>
 
             <img class="live-thumbnail-preview" width="160" height="90" src="${escapeAttr(safeImageUrl(stream.thumbnailURL)||'assets/img/placeholder.svg')}" alt="Thumbnail da transmissão" loading="lazy">
@@ -438,7 +439,7 @@ function renderChatMessages(messages) {
         const avatar = document.createElement(profile.photoURL ? 'img' : 'span');
         avatar.className = 'chat-avatar';
         if (profile.photoURL) {
-            avatar.src = profile.photoURL;
+            avatar.src = safeImageUrl(profile.photoURL);
             avatar.alt = username;
         }
         else {
@@ -448,7 +449,12 @@ function renderChatMessages(messages) {
         body.className = 'chat-message-body';
         const meta = document.createElement('div');
         meta.className = 'chat-message-meta';
-        const name = document.createElement('strong');
+        const href = publicProfileUrl(message.uid);
+        const name = document.createElement(href ? 'a' : 'strong');
+        if(href){name.href=href;name.className='profile-link';}
+        const avatarLink=document.createElement(href?'a':'span');
+        if(href){avatarLink.href=href;avatarLink.className='profile-link';avatarLink.setAttribute('aria-label','Ver perfil de '+username);}
+        avatarLink.append(avatar);
         name.textContent = username;
         if (authorIsStreamer || authorIsAdmin) {
             const badge = document.createElement('span');
@@ -472,7 +478,7 @@ function renderChatMessages(messages) {
             removeButton.setAttribute('aria-label', removeButton.title);
             removeButton.textContent = '×';
             removeButton.onclick = () => deleteChatMessage(message.id);
-            article.append(avatar, body, removeButton);
+            article.append(avatarLink, body, removeButton);
             if (canModerateChat()) {
                 const tools = document.createElement('div');
                 tools.className = 'chat-mod-tools';
@@ -496,7 +502,7 @@ function renderChatMessages(messages) {
             }
         }
         else {
-            article.append(avatar, body);
+            article.append(avatarLink, body);
         }
         container.appendChild(article);
         if (!isOwn) {
