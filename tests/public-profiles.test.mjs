@@ -34,7 +34,7 @@ test('ordinary users do not require channel creation or fabricated stream data',
 });
 test('network is bounded, paginated and exposes public profile projections only',async()=>{
  for(const kind of ['followers','following']){
- const db=database([[profile],[],[{followers:0,following:21}],Array.from({length:21},()=>profile)]);
+ const db=database([[{exists:true}],Array.from({length:21},()=>profile)]);
  const result=await executePlatform(db,null,'profile.network',{uid,kind,offset:20});assert.equal(result.profiles.length,20);assert.equal(result.hasMore,true);assert.equal(result.profiles[0].email,undefined);assert.deepEqual(db.queries.at(-1).args,[uid,20]);assert.match(db.queries.at(-1).sql,/limit 21 offset \$2/);
  }
  for(const data of [{uid,kind:'sql'},{uid,kind:'followers',offset:-1},{uid,kind:'following',offset:1001}])await assert.rejects(executePlatform(database([]),null,'profile.network',data),e=>e.code==='invalid_input');
@@ -53,4 +53,16 @@ test('follow writes serialize repeated requests and reject self-follow',async()=
  assert.deepEqual(db.queries.at(-2).args,['follow:'+uid+':channel']);assert.match(db.queries.at(-2).sql,/pg_advisory_xact_lock/);
  assert.match(db.queries.at(-1).sql,following?/on conflict do nothing/:/delete from public.follows/);
  }
+});
+
+test('legacy adapter denies anonymous bulk enumeration and validates direct identifiers',async()=>{
+ await assert.rejects(executePlatform(database([]),null,'documents.read',{path:['profiles']}),e=>e.status===403);
+ await assert.rejects(executePlatform(database([]),null,'documents.read',{path:['profiles',"' OR 1=1"]}),e=>e.code==='invalid_uid');
+ const db=database([[{id:uid,uid,username:'Streamer'}]]);const result=await executePlatform(db,null,'documents.read',{path:['profiles',uid]});assert.equal(result.documents.length,1);
+ assert.match(db.queries[0].sql,/disabled_at is null/);assert.match(db.queries[0].sql,/pn.banned/);assert.match(db.queries[0].sql,/case when i.id=\$2::uuid/);assert.deepEqual(db.queries[0].args,[uid,null]);
+});
+test('profile.get cannot bypass immutable identifier validation; public search is bounded',async()=>{
+ await assert.rejects(executePlatform(database([]),null,'profile.get',{uid:'not-a-uuid'}),e=>e.code==='invalid_uid');
+ await assert.rejects(executePlatform(database([]),null,'profile.search',{query:'a'}),e=>e.code==='invalid_input');
+ const db=database([[]]);await executePlatform(db,null,'profile.search',{query:'streamer'});assert.deepEqual(db.queries[0].args,['streamer']);assert.match(db.queries[0].sql,/limit 20/);
 });

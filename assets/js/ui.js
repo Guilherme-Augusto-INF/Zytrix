@@ -1,3 +1,4 @@
+import {safeImageUrl} from './security.js';
 import {publicProfileUrl} from './profile-url.js';
 // Broken images retain their reserved geometry and use a local fallback.
 document.addEventListener('error',event=>{const img=event.target;if(img instanceof HTMLImageElement&&!img.closest('.image-upload')&&img.getAttribute('src')!=='assets/img/placeholder.svg')img.src='assets/img/placeholder.svg';},true);
@@ -50,7 +51,7 @@ export function liveCard(live, options = {}) {
     <article class="card live-card" data-live-id="${escapeAttr(live.id)}">
       <div class="thumb">
         ${live.thumbnailURL
-        ? `<img width="640" height="360"${options.priority === true ? ' fetchpriority="high"' : ''} src="${escapeAttr(live.thumbnailURL)}" alt="Thumbnail de ${escapeAttr(live.username || 'streamer')}">`
+        ? `<img width="640" height="360"${options.priority === true ? ' fetchpriority="high"' : ''} src="${escapeAttr(safeImageUrl(live.thumbnailURL))}" alt="Thumbnail de ${escapeAttr(live.username || 'streamer')}">`
         : '<div class="state">ZYTRIX</div>'}
 
         <span class="badge">● AO VIVO</span>
@@ -73,7 +74,7 @@ export function liveMeta(live) {
     return `<div class="live-meta">
         ${href?`<a class="profile-link" href="${escapeAttr(href)}" aria-label="Ver perfil de ${escapeAttr(live.username||'streamer')}">`:''}
         ${live.photoURL
-        ? `<img width="34" height="34" class="avatar" src="${escapeAttr(live.photoURL)}" alt="Foto de ${escapeAttr(live.username || 'streamer')}">`
+        ? `<img width="34" height="34" class="avatar" src="${escapeAttr(safeImageUrl(live.photoURL))}" alt="Foto de ${escapeAttr(live.username || 'streamer')}">`
         : `<span class="avatar">${escapeHtml(initial)}</span>`}
 
         ${href?'</a>':''}<div>

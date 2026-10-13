@@ -20,7 +20,8 @@ export async function publicNetwork(c,data) {
  if(!['followers','following'].includes(kind))throw new ApiError('invalid_input');
  const offset=data.offset??0;
  if(!Number.isSafeInteger(offset)||offset<0||offset>1000)throw new ApiError('invalid_input');
- if(!(await publicProfile(c,{uid})).profile)return {profiles:[],hasMore:false};
+ const available=(await c.query(`select 1 from public.profiles p where p.user_id=$1::uuid and ${activeProfileFilter('p.user_id')}`,[uid])).rows.length>0;
+ if(!available)return {profiles:[],hasMore:false};
  const target=kind==='followers'?'f.follower_id':'ch.owner_id';
  const predicate=kind==='followers'?'ch.owner_id=$1::uuid':'f.follower_id=$1::uuid';
  const profiles=(await c.query(`select p.user_id::text as uid,p.name,p.username,p.photo_url as "photoURL",p.bio,p.created_at as "createdAt" from public.follows f join public.channels ch on ch.id=f.channel_id join public.profiles p on p.user_id=${target} where ${predicate} and ch.visibility='public' and ch.deleted_at is null and ${activeProfileFilter('p.user_id')} order by f.followed_at desc,p.user_id limit 21 offset $2`,[uid,offset])).rows;

@@ -36,3 +36,14 @@ Keep PR unmerged until preview and authenticated regression checks are complete.
 - Three preexisting PostgreSQL integration suites skipped. An extra restricted-runtime PostgreSQL attempt from the Work filesystem failed EAI_AGAIN (network/DNS restriction); runtime public queries were instead validated on the deployed preview.
 - Auth emitter is pinned in current server code to the existing service. This isolated DB does not synchronize newly created parent auth sessions: use a properly isolated QA auth setup before testing authenticated preview flows. No auth architecture rewritten in this feature.
 - PR #31 remains Draft. No merge, production deployment or production smoke test performed.
+
+## Security review and release authorization (2026-10-13)
+User explicitly requested security corrections and production deployment after the initial Draft delivery.
+- Fixed visibility bypass in legacy documents.read profiles: same active-account predicate, UUID validation, bulk listing restricted to admins, username-change timestamp returned only to owner.
+- Profile get validates normalized UUID; search minimum 2 characters and maximum 20 results.
+- Added bounded-memory profile read quota (120/min/source/process, max 2048 buckets); Retry-After on 429. Uses Vercel-provided client address; quota is local to each function process and is not a global distributed abuse quota.
+- Social network availability now checks only profile visibility, removing redundant channel/stat queries.
+- Follow button fails closed until current state is confirmed; stale-account responses discarded before updating status/count, unavailable profiles clear content. Expired-session messages retained.
+- Shared live-card avatar/thumbnail URLs use the existing image allowlist.
+- Validation: 85 PASS, 0 FAIL, 3 skipped in npm test; lint/typecheck/build PASS; npm audit reports 0 advisories. New behavioral tests cover quota expiry/capacity, legacy enumeration rejection, UUID/search bounds, authoritative follow loading and account switching.
+- No schema migrations or production data changes. Original live authenticated QA/mobile limitations still apply; production smoke to be recorded in PR after deployment.

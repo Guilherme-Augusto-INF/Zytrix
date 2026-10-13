@@ -1,3 +1,4 @@
+import {allowProfileRead,isPublicProfileRead} from '../../server/neon/profile-limits.mjs';
 import { authenticate } from '../../server/neon/auth.mjs';
 import { platformEnabled, platformPool } from '../../server/neon/platform-pool.mjs';
 import { ApiError, executePlatform } from '../../server/neon/platform.mjs';
@@ -13,6 +14,10 @@ export default async function handler(req,res) {
     let body;
     try{body=typeof req.body==='string'?JSON.parse(req.body):req.body;}catch{throw new ApiError('invalid_input');}
     if(!body||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body),'utf8')>16384||typeof body.action!=='string'||body.action.length>64)throw new ApiError('invalid_input');
+    if(isPublicProfileRead(body)){
+      const source=req.headers['x-vercel-forwarded-for']??req.socket?.remoteAddress??'anonymous';
+      if(!allowProfileRead(typeof source==='string'?source.split(',')[0].trim():'anonymous')){res.setHeader('Retry-After','60');throw new ApiError('rate_limited',429);}
+    }
     const identity=await authenticate(req);
     client=await platformPool().connect();
     const readOnly=isReadAction(body.action);

@@ -9,7 +9,7 @@ header();footer();
 // Public content never waits for, or fails because of, a stale session.
 const anonymous=createPlatformClient(()=>null),root=document.querySelector('#public-profile-root');
 const params=new URLSearchParams(location.search),uid=params.getAll('uid').length===1?params.get('uid')?.toLowerCase():null;
-let state=null,user=null,following=false,busy=false,sessionVersion=0,networkVersion=0;
+let state=null,user=null,following=false,followReady=false,busy=false,sessionVersion=0,networkVersion=0;
 const login='/login.html?redirect='+encodeURIComponent(publicProfileUrl(uid)||'/usuario.html');
 const status=message=>{const node=root.querySelector('#public-status');if(node)node.textContent=message;};
 function avatar(p,large=false){const src=safeImageUrl(p.photoURL),cls=large?'public-avatar':'avatar';return src?`<img class="${cls}" src="${escapeAttr(src)}" alt="Foto de ${escapeAttr(p.username)}" width="${large?112:34}" height="${large?112:34}" referrerpolicy="no-referrer">`:`<span class="${cls}" aria-hidden="true">${escapeHtml((p.username||'U').charAt(0).toUpperCase())}</span>`;}
@@ -18,12 +18,12 @@ function actions(){
  if(!button)return;
  const own=user?.uid===uid;
  button.hidden=own||!state.channel;manage.hidden=!own;
- button.disabled=busy;button.setAttribute('aria-pressed',String(following));button.textContent=busy?'Salvando…':!user?'Entrar para seguir':following?'Deixar de seguir':'Seguir canal';
+ button.disabled=busy||Boolean(user&&!followReady);button.setAttribute('aria-pressed',String(following));button.textContent=busy?'Salvando…':user&&!followReady?'Verificando…':!user?'Entrar para seguir':following?'Deixar de seguir':'Seguir canal';
 }
 async function followState(){
- const version=++sessionVersion;following=false;actions();
+ const version=++sessionVersion;following=false;followReady=false;actions();
  if(!user||!state?.channel||user.uid===uid)return;
- try{const result=await publicPlatform('discovery.context');if(version!==sessionVersion)return;following=result.following.includes(uid);actions();}
+ try{const result=await publicPlatform('discovery.context');if(version!==sessionVersion)return;following=result.following.includes(uid);followReady=true;actions();}
  catch{if(version===sessionVersion)status('Não foi possível confirmar se você segue este canal.');}
 }
 async function network(kind,offset=0){
@@ -53,10 +53,10 @@ async function load(){
  root.querySelector('#show-followers').onclick=()=>network('followers');root.querySelector('#show-following').onclick=()=>network('following');
  root.querySelector('#public-share').onclick=async()=>{try{await navigator.clipboard.writeText(new URL(publicProfileUrl(uid),location.origin).href);status('Link copiado.');}catch{status('Copie o endereço na barra do navegador para compartilhar.');}};
  root.querySelector('#public-follow').onclick=async()=>{
- if(busy)return;if(!user){location.href=login;return;}if(user.uid===uid||!state.channel)return;
+ if(busy)return;if(!user){location.href=login;return;}if(user.uid===uid||!state.channel||!followReady)return;
  const owner=user.uid,version=sessionVersion,next=!following;busy=true;actions();status('');
- try{await publicPlatform('follow.set',{channelId:state.channel.id,following:next});if(owner!==user?.uid||version!==sessionVersion)return;following=next;status(next?'Você está seguindo este canal.':'Você deixou de seguir este canal.');const updated=await anonymous('profile.public',{uid});if(updated.profile)root.querySelector('#follower-count').textContent=updated.stats.followers.toLocaleString('pt-BR');}
- catch(error){status(error.status===401?'Sua sessão expirou. Entre novamente.':error.code==='verified_email_required'?'Verifique seu e-mail para seguir canais.':'Não foi possível salvar. Tente novamente.');void followState();}
+ try{await publicPlatform('follow.set',{channelId:state.channel.id,following:next});if(owner!==user?.uid||version!==sessionVersion)return;following=next;status(next?'Você está seguindo este canal.':'Você deixou de seguir este canal.');const updated=await anonymous('profile.public',{uid});if(owner!==user?.uid||version!==sessionVersion)return;if(updated.profile)root.querySelector('#follower-count').textContent=updated.stats.followers.toLocaleString('pt-BR');else{state=updated;root.innerHTML='<div class="card panel"><h1>Perfil indisponível</h1><p>Este perfil não está disponível publicamente.</p></div>';}}
+ catch(error){if(owner!==user?.uid||version!==sessionVersion)return;status(error.status===401?'Sua sessão expirou. Entre novamente.':error.code==='verified_email_required'?'Verifique seu e-mail para seguir canais.':'Não foi possível salvar. Tente novamente.');if(error.status!==401&&error.code!=='verified_email_required')void followState();}
  finally{busy=false;actions();}
  };
  }catch{root.innerHTML='<div class="card panel"><h1>Perfil temporariamente indisponível</h1><p>Não foi possível carregar os dados.</p><button class="btn" id="public-retry">Tentar novamente</button></div>';root.querySelector('#public-retry').onclick=load;}
