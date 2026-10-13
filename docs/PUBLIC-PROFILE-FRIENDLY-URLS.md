@@ -45,7 +45,7 @@ Botões/menus de denúncia e ações de seguir/moderação/financeiras não fora
 ## Testes executados
 
 - `npm ci`:PASS (271 pacotes); peers/deprecações transitivos já existentes permanecem visíveis. Nenhuma nova dependência.
-- `npm run lint`:PASS; `npm run typecheck`:PASS; `npm test`:**95 totais,91 PASS,4 SKIP,0 FAIL**; `npm run build`:PASS.
+- `npm run lint`:PASS; `npm run typecheck`:PASS; `npm test`:**96 totais,92 PASS,4 SKIP,0 FAIL**; `npm run build`:PASS.
 - Novos testes unitários: normalização ASCII/case, `_`/`-`/`.`, UUID não aceito pelo gerador de URL, caracteres Unicode/inválidos, escapes, slash/traversal, parâmetros duplicados, SQL parametrizado, filtragem de disponibilidade, fail-closed sem migração, XSS em HTML/JSON, canonical/OG, GET/redirect404/503/429, assets e APIs sem catch-all.
 - Sessão/seguidores: testes existentes de usuário conectado, troca de conta e descarte de resultado antigo continuaram PASS; não houve troca no contrato de autorização.
 - Smoke HTTP **local com fixtures**:GET amigável200 com canonical; legado307; maiúsculas307; query que tenta trocar username307 para o perfil correto. Todas respostas no-store.
@@ -61,7 +61,15 @@ Variáveis Vercel específicas apenas desta branch, target preview: DATABASE_URL
 
 O verificador atual de Auth fixa o issuer do serviço usado pelo site. Mantivemos esse pin; com URL de Auth isolada, autenticação no preview falha fechada. As páginas públicas SSR são independentes de login. Não afrouxamos issuer/CSP para testar esta feature, nem apontamos novos logins do preview para Auth de produção. E2E autenticado no preview fica como gate; a autorização existente passou nos testes locais.
 
-PR, URL e resultado do build/smoke hospedado serão registrados após a publicação da branch. Nenhum merge ou deploy em produção está autorizado por esta entrega.
+PR em rascunho: https://github.com/Guilherme-Augusto-INF/Zytrix/pull/34 . Commits de código: `fffae4e` (resolver/migração), `90efa46` (SSR/navegação), `18f60b5` (testes), `d01285e` (proteção do preview). Tree remota conferida contra a implementação testada localmente.
+
+Preview do código final: https://zytrix-lydrq3jl7-guilhermeaugusto2525-1431.vercel.app/@route_release_test3 — deployment dpl_3e8y65K62KkFggkybCZSFxULcCPW, commit `d01285ee3762b2ca6524ce8ef028f45e18a9bb66`, READY, região gru1, target preview. Vercel e check Snyk do PR:SUCCESS para esse commit; Snyk SUCCESS não certifica ausência de vulnerabilidades preexistentes.
+
+Smoke hospedado pelo conector autenticado Vercel: rota amigável200, HTML com título/canonical/OG/bootstrap público e no-store; refresh/repetição200; nomes inexistentes/aposentados404; conta fixture temporariamente desativada404 por nome e UUID; UUID legado duplicado404; slash codificado404; assets JS/CSS200 (CSS responsivo presente); API lives200. URLs legadas e maiúsculas terminaram na página canônica200 após redirects seguidos pelo conector;307 inicial foi comprovado nos testes HTTP locais, sem presumir que o status200 final é o status do primeiro salto.
+
+O primeiro preview revelou um self-redirect na canonicalização do parâmetro de compartilhamento de proteção Vercel. Corrigido: `_vercel_share` e captura de rewrite que corresponde ao path não alteram a identidade e não disparam loop. Query de username diferente continua sem trocar o perfil. Novo teste de regressão passou, e o preview final devolveu200 no path amigável. Nenhum controle de proteção Vercel foi desativado.
+
+API config503 no preview confirma o pin Auth fail-closed. Leitura SSR real executou com o runtime da branch isolada; escritas runtime/Auth E2E não foram certificadas. A simulação `git merge-tree` com o PR33 (menu de denúncias) concluiu sem conflitos nas versões examinadas; não incorporamos esse PR nem alteramos seus arquivos adicionais. Nenhum merge ou deploy em produção está autorizado por esta entrega.
 
 ## /DEVIL — riscos e resposta
 
