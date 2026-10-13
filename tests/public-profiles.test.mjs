@@ -9,9 +9,9 @@ const profile={uid,name:'<script>alert(1)</script>',username:'streamer',photoURL
 function database(values){const queries=[];return {queries,async query(sql,args){queries.push({sql,args});const rows=values.shift()??[];return {rows,rowCount:rows.length};}};}
 test('public identifiers allow immutable UUIDs only and are normalized',async()=>{
  for(const value of [null,'','../admin','https://evil.test','1234',"' OR 1=1",['uid']]){
-  assert.equal(publicProfileUrl(value),'');await assert.rejects(executePlatform(database([]),null,'profile.public',{uid:value}),e=>e instanceof ApiError&&e.code==='invalid_uid');
+  await assert.rejects(executePlatform(database([]),null,'profile.public',{uid:value}),e=>e instanceof ApiError&&e.code==='invalid_uid');
  }
- assert.equal(publicProfileUrl(uid),'/usuario.html?uid='+uid);
+ assert.equal(publicProfileUrl(uid),'');assert.equal(publicProfileUrl('Streamer_Name-1'),'/@streamer_name-1');
 });
 test('public projection excludes private fields and rejects unsafe image URLs',()=>{
  assert.deepEqual(Object.keys(publicFields(profile)),['uid','name','username','photoURL','bio','createdAt']);
