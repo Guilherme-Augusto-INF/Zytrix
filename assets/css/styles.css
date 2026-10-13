@@ -1318,3 +1318,5 @@ select:focus-visible {
 .home-page .thumb > .state { position: absolute; inset: 0; min-height: 0; }
 .home-page .thumb img { display: block; }
 .home-page .home-live-state { position: absolute; inset: 0; min-height: 0; align-content: start; padding-top: 32px; pointer-events: none; }
+
+.profile-link{color:inherit;text-decoration:none}.profile-link:hover{text-decoration:underline}.profile-link:focus-visible{outline:3px solid #bda2ff;outline-offset:4px}

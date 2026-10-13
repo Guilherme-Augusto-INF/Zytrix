@@ -2,7 +2,7 @@
 // PostgreSQL READ ONLY independently enforces the contract.
 const reads = new Set(['auth.identity','me','documents.read','progress.get',
   'preferences.get','categories.list','categories.followed','discovery.context',
-  'live.feed','lives.list','live.get','profile.get','wallet.get','chat.list',
+  'live.feed','lives.list','live.get','profile.get','profile.search','profile.public','profile.network','wallet.get','chat.list',
   'notifications.list','transactions.list','admin.overview','admin.chat-summary',
   'policies.current','viewer.count','follow.count','schedules.list']);
 export const isReadAction = action => reads.has(action);

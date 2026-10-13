@@ -18,7 +18,8 @@ function render(items) {
         && (!sub || String(live.categoryId).trim() === `${category} - ${sub}`));
     matches.sort((a, b) => Number(b.viewerCount || 0) - Number(a.viewerCount || 0));
     grid.innerHTML = matches.length ? matches.map(liveCard).join('') : '<div class="state">Nenhuma live nesta categoria.</div>';
-    grid.querySelectorAll('.live-card').forEach(card => card.addEventListener('click', () => {
+    grid.querySelectorAll('.live-card').forEach(card => card.addEventListener('click', event => {
+        if(event.target.closest('a,button'))return;
         const live = matches.find(item => item.id === card.dataset.liveId);
         if (!live)
             return;
