@@ -116,3 +116,17 @@ test('disabled, failed and stale report availability never creates action contro
     const article = d.message(); const pending = c.add(article, 'm1', 'u1', 's1');
     await Promise.resolve(); article.remove(); resolve(true); await pending; assert.equal(article.children.length, 0); c.dispose();
 });
+
+test('asynchronous action insertion preserves bottom scrolling and a reader position', async () => {
+    const d = dom(); d.root.className = 'chat-messages';
+    d.root.scrollTop = 80; d.root.clientHeight = 20; d.root.scrollHeight = 100;
+    const c = createChatReportActions(d.root, () => true);
+    const article = d.message(); const originalAdd = article.classList.add;
+    article.classList.add = value => { originalAdd(value); d.root.scrollHeight = 200; };
+    await c.add(article, 'm1', 'u1', 's1'); assert.equal(d.root.scrollTop, 200);
+    d.root.scrollTop = 0;
+    const next = d.message(); const nextAdd = next.classList.add;
+    next.classList.add = value => { nextAdd(value); d.root.scrollHeight = 300; };
+    await c.add(next, 'm2', 'u2', 's1'); assert.equal(d.root.scrollTop, 0);
+    c.dispose();
+});
