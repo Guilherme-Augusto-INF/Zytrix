@@ -1,3 +1,4 @@
+import {publicProfileUrl} from './profile-url.js';
 import { auth, db, onAuthStateChanged, collection, doc, getDoc, onSnapshot, query, setDoc, serverTimestamp, where } from './client.js';
 import { header, footer, escapeHtml } from './ui.js';
 import { parseStreamingSource, streamingPlatformLabel } from './streaming.js';
@@ -97,7 +98,7 @@ function renderSupportNotifications() {
       <article class="notification-item">
         <div class="notification-main">
           <strong>◈ ${amount.toLocaleString('pt-BR')} Zy Coins recebidos</strong>
-          <span class="muted">${escapeHtml(profile.username)} apoiou sua transmissão</span>
+          <span class="muted">${publicProfileUrl(profile.username)?`<a class="profile-link" href="${publicProfileUrl(profile.username)}">${escapeHtml(profile.username)}</a>`:escapeHtml(profile.username)} apoiou sua transmissão</span>
           <span class="muted" style="display:block;margin-top:4px">${escapeHtml(formatSupportTime(transaction.createdAt))}</span>
         </div>
         ${streamId
@@ -145,7 +146,7 @@ function renderFollowedChannels() {
         return `
       <article class="notification-item">
         <div class="notification-main">
-          <strong>${escapeHtml(channel.channelName || 'Streamer')}</strong>
+          ${publicProfileUrl(channel.username)?`<a class="profile-link" href="${publicProfileUrl(channel.username)}">${escapeHtml(channel.channelName || channel.username)}</a>`:`<strong>${escapeHtml(channel.channelName || 'Streamer')}</strong>`}
           <span class="${live ? 'live-indicator' : 'offline-indicator'}">
             ${live ? '● AO VIVO' : 'OFFLINE'} · ${escapeHtml(platform)}
           </span>
