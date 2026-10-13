@@ -80,6 +80,7 @@ test('delegated controller handles keyboard, outside clicks, action selection an
     const menu = d.document.body.querySelector('.chat-report-menu');
     assert.equal(calls, 1); assert.equal(d.listeners.size, 4);
     d.event('click', first); assert.equal(first.getAttribute('aria-expanded'), 'true'); assert.equal(menu.children.length, 2);
+    d.event('scroll', menu); assert.equal(menu.hidden, false);
     assert.equal(d.document.activeElement, menu.firstElementChild);
     d.event('keydown', menu.firstElementChild, 'ArrowDown'); assert.equal(d.document.activeElement, menu.lastElementChild);
     d.event('click', second); assert.equal(first.getAttribute('aria-expanded'), 'false'); assert.equal(second.getAttribute('aria-expanded'), 'true');
@@ -87,6 +88,7 @@ test('delegated controller handles keyboard, outside clicks, action selection an
     d.event('keydown', first, 'ArrowDown'); assert.equal(menu.hidden, false);
     d.event('keydown', menu.firstElementChild, 'Tab'); assert.equal(menu.hidden, true); assert.equal(d.document.activeElement, first);
     d.event('click', first); d.event('pointerdown', d.document.body); assert.equal(menu.hidden, true);
+    d.event('click', first); d.event('scroll', d.root); assert.equal(menu.hidden, true);
     d.event('click', first); const link = menu.firstElementChild; assert.equal(link.getAttribute('role'), 'menuitem');
     d.event('click', link); assert.equal(menu.hidden, true);
     c.dispose(); assert.equal(d.listeners.size, 0); assert.equal(d.windowListeners.size, 0); assert.equal(menu.isConnected, false);

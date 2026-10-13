@@ -5,8 +5,8 @@ import { readFile, writeFile } from 'node:fs/promises';
 const output = process.argv[2];
 if (!output) throw new Error('Specify a scratch output HTML path');
 const css = await readFile('assets/css/styles.css', 'utf8') + await readFile('assets/css/chat-report-actions.css', 'utf8');
-const result = await build({ stdin: { resolveDir: process.cwd(), contents: `
-import { createChatReportActions } from './assets/js/chat-report-actions.js';
+const result = await build({ stdin: { resolveDir: new URL('.', import.meta.url).pathname, contents: `
+import { createChatReportActions } from '../../assets/js/chat-report-actions.js';
 const root = document.querySelector('#fixture');
 let calls = 0;
 const controller = createChatReportActions(root, () => { calls++; return true; });
