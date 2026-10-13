@@ -132,8 +132,11 @@ export function createChatReportActions(root, available) {
             button.setAttribute('aria-expanded', 'false');
             button.setAttribute('aria-controls', menu.id);
             data.set(button, { targets, messageId });
+            const scroller = article.closest('.chat-messages');
+            const atBottom = scroller && scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
             article.classList.add('has-report-actions');
             article.append(button);
+            if (atBottom) scroller.scrollTop = scroller.scrollHeight;
             if (restoreId === messageId) { restoreId = null; button.focus({ preventScroll: true }); }
         },
         dispose() {
