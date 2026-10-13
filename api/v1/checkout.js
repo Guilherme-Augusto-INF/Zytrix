@@ -2,14 +2,16 @@ import {authenticate} from '../../server/neon/auth.mjs';
 import {platformPool} from '../../server/neon/platform-pool.mjs';
 import {ApiError} from '../../server/neon/platform.mjs';
 import {sandboxStripe,prepareOrder} from '../../server/neon/payments.mjs';
+import {readJsonBody,CHECKOUT_BODY_BYTES} from '../../server/neon/request-body.mjs';
+export const config={api:{bodyParser:false}};
 export default async function handler(req,res){
   res.setHeader('Cache-Control','no-store');if(req.method!=='POST')return res.status(405).json({error:'method_not_allowed'});
   if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']??''))return res.status(415).json({error:'json_required'});
   if(req.headers['sec-fetch-site']==='cross-site')return res.status(403).json({error:'cross_site_denied'});
   let c;
   try{
-    const {stripe,origin}=sandboxStripe();let data;try{data=typeof req.body==='string'?JSON.parse(req.body):req.body;}catch{throw new ApiError('invalid_input');}
-    if(!data||typeof data!=='object'||Buffer.byteLength(JSON.stringify(data))>4096)throw new ApiError('invalid_input');
+    const data=await readJsonBody(req,CHECKOUT_BODY_BYTES,{maxArray:0,maxDepth:2,maxKeys:8});
+    const {stripe,origin}=sandboxStripe();
     const identity=await authenticate(req);c=await platformPool().connect();await c.query('begin');
     const order=await prepareOrder(c,identity,data);await c.query('commit');
     const session=await stripe.checkout.sessions.create({mode:'payment',payment_method_types:['card'],
