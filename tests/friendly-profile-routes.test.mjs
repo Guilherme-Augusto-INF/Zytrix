@@ -42,6 +42,17 @@ test('server HTML escapes public data and emits friendly canonical, OG and inert
  assert.ok(html.includes('\\u003c/script\\u003e'));assert.ok(!html.includes('sessionToken'));assert.ok(!html.includes('secret'));
  assert.match(html,/src="\/assets\/js\/public-profile.js"/);assert.match(html,/width=device-width/);assert.ok(!html.includes('?uid='));
 });
+test('SSR treats replacement metacharacters as literal public data',()=>{
+ const value="$& $` $' $$ </script><img src=x onerror=alert(1)>";
+ const state={profile:{...profile,name:value,bio:value},channel:null,stats:{followers:0,following:0}};
+ const html=renderProfileDocument(template,state);
+ const bootstrap=html.match(/<script type="application\/json" id="public-profile-data">(.*?)<\/script>/s);
+ assert.ok(bootstrap);assert.deepEqual(JSON.parse(bootstrap[1]),state);
+ assert.equal((html.match(/id="public-profile-data"/g)||[]).length,1);
+ assert.ok(!html.includes('<img src=x onerror='));
+ assert.ok(html.includes('$&amp; $` $&#039; $$ &lt;/script&gt;'));
+});
+
 test('HTTP pages serve direct profiles, uncacheable canonical redirects and unavailable states',async()=>{
  for(const [url,rows,status,location]of [
   ['/@streamer_name-1',[[{ready:true}],[profile],[],[{followers:0,following:0}]],200],

@@ -28,11 +28,30 @@ test('isolated PostgreSQL resolves names, retires old links and serializes compe
   const competing=executePlatform(other,identity(beta),'profile.update',{username:contest.toUpperCase(),bio:''}).then(()=>({ok:true}),error=>({error}));
   await c.query('commit');const loser=await competing;assert.equal(loser.ok,undefined);assert.equal(loser.error.code,'23505');await other.query('rollback');
   assert.equal((await publicProfile(c,{username:contest})).profile.uid,alpha);
+  // A retired name remains unavailable even when a contender checked before commit.
+  const retired=contest,nextName='route_retired_'+suffix;
+  await c.query('begin');await other.query('begin');
+  await c.query("set local lock_timeout='5s'");await other.query("set local lock_timeout='5s'");
+  await c.query("update public.profiles set username_updated_at=now()-interval '8 days' where user_id=$1",[alpha]);
+  await other.query("update public.profiles set username_updated_at=now()-interval '8 days' where user_id=$1",[beta]);
+  await executePlatform(c,identity(alpha),'profile.update',{username:nextName,bio:''});
+  let settled=false;
+  const takeover=executePlatform(other,identity(beta),'profile.update',{username:retired,bio:''}).then(()=>({ok:true}),error=>({error})).finally(()=>{settled=true;});
+  await c.query('select pg_sleep(0.15)');assert.equal(settled,false);
+  await c.query('commit');const rejected=await takeover;assert.equal(rejected.ok,undefined);assert.equal(rejected.error.code,'23505');await other.query('rollback');
+  assert.equal((await publicProfile(c,{username:retired})).profile,null);
+  await c.query('begin');
+  await assert.rejects(executePlatform(c,identity(alpha),'profile.update',{username:retired,bio:''}),e=>e.code==='reserved_username');
+  await c.query('rollback');
+  // Continue the HTTP and disabled-account checks with the current name.
+  await c.query('begin');await c.query("update public.profiles set username_updated_at=now()-interval '8 days' where user_id=$1",[alpha]);
+  const finalName='route_final_'+suffix;
+  await executePlatform(c,identity(alpha),'profile.update',{username:finalName,bio:''});await c.query('commit');
   await c.query('begin');await c.query('update public.user_accounts set disabled_at=now() where user_id=$1',[alpha]);
-  assert.equal((await publicProfile(c,{username:contest})).profile,null);assert.equal((await publicProfile(c,{uid:alpha})).profile,null);await c.query('rollback');
+  assert.equal((await publicProfile(c,{username:finalName})).profile,null);assert.equal((await publicProfile(c,{uid:alpha})).profile,null);await c.query('rollback');
   const handler=createProfilePageHandler({pool:()=>pool,enabled:()=>true,allow:()=>true});
   const response=()=>({headers:{},setHeader(k,v){this.headers[k]=v;},status(code){this.code=code;return this;},end(html){this.html=html;}});
-  for(const method of ['GET','HEAD']){const res=response();await handler({method,url:'/@'+contest,headers:{authorization:'Bearer invalid-stale-session'}},res);assert.equal(res.code,200);if(method==='HEAD')assert.equal(res.html,'');else assert.ok(res.html.includes('https://zytrix-lives.vercel.app/@'+contest));}
-  const legacy=response();await handler({method:'GET',url:'/usuario.html?uid='+alpha,headers:{}},legacy);assert.equal(legacy.code,307);assert.equal(legacy.headers.Location,'/@'+contest);
+  for(const method of ['GET','HEAD']){const res=response();await handler({method,url:'/@'+finalName,headers:{authorization:'Bearer invalid-stale-session'}},res);assert.equal(res.code,200);if(method==='HEAD')assert.equal(res.html,'');else assert.ok(res.html.includes('https://zytrix-lives.vercel.app/@'+finalName));}
+  const legacy=response();await handler({method:'GET',url:'/usuario.html?uid='+alpha,headers:{}},legacy);assert.equal(legacy.code,307);assert.equal(legacy.headers.Location,'/@'+finalName);
  }finally{await c.query('rollback').catch(()=>{});await other.query('rollback').catch(()=>{});c.release();other.release();await pool.end();}
 });

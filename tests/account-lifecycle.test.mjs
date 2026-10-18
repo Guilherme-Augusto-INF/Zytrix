@@ -14,3 +14,15 @@ test('SSE slots bound users/process and release expired/disconnected clients',()
  a();const b=acquireRealtime('test',{now:3,maximum:1});assert.ok(b);assert.equal(acquireRealtime('other',{now:4,maximum:1}),null);
  const c=acquireRealtime('other',{now:30004,maximum:1});assert.ok(c);b();c();
 });
+
+test('deletion does not use a claimable deterministic tombstone username',async()=>{
+ const subject='ef111111-1111-4111-8111-111111111111',names=[];
+ const c={async query(sql,args){
+  if(sql.includes('select user_id as id,deleted_at'))return {rows:[{id:subject,deleted_at:null}]};
+  if(sql.startsWith('update public.profiles set username='))names.push(args[1]);
+  return {rows:[],rowCount:0};
+ }};
+ for(let i=0;i<2;i++)assert.deepEqual(await deleteAccount(c,{authProvider:'neon',subject,emailVerified:true,sessionCreatedAt:Date.now()},{confirmation:'EXCLUIR',requestKey:'deletion-fixture-request'}),{deleted:true,replayed:false});
+ for(const name of names){assert.match(name,/^gone_[a-f0-9]{24}$/);assert.notEqual(name,'gone_'+subject.replaceAll('-','').slice(0,24));}
+ assert.notEqual(names[0],names[1]);
+});

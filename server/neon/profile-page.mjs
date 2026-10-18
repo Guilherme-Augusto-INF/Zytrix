@@ -33,14 +33,15 @@ export function profileQueryNeedsCanonical(url,username){
 export function renderProfileDocument(template,state){
  const p=state.profile,title=`${p.name||p.username} (@${p.username}) — Zytrix`;
  const description=(p.bio||`Perfil público de ${p.username} na Zytrix.`).slice(0,160),canonical=ORIGIN+publicProfileUrl(p.username);
- let html=renderStaticLayout(template,'usuario.html').replace(/<title>[^<]*<\/title>/,`<title>${escapeHtml(title)}</title>`);
- for(const [selector,value]of [['name="description"',description],['property="og:title"',title],['property="og:description"',description],['property="og:url"',canonical]])html=html.replace(new RegExp('<meta '+selector+' content="[^"]*">'),`<meta ${selector} content="${escapeAttr(value)}">`);
- html=html.replace(/<link rel="canonical" href="[^"]*">/,`<link rel="canonical" href="${escapeAttr(canonical)}">`);
- if(p.photoURL)html=html.replace('</head>',`<meta property="og:image" content="${escapeAttr(p.photoURL)}"></head>`);
- html=html.replace('<div class="state" role="status">Carregando perfil público…</div>',`<div class="state" role="status"><h1>${escapeHtml(p.name||p.username)}</h1><p>@${escapeHtml(p.username)}</p><p>${escapeHtml(p.bio||'Perfil público na Zytrix.')}</p></div>`);
+ // Callback replacements keep user-controlled $&, $`, $' and $$ literal.
+ let html=renderStaticLayout(template,'usuario.html').replace(/<title>[^<]*<\/title>/,()=>`<title>${escapeHtml(title)}</title>`);
+ for(const [selector,value]of [['name="description"',description],['property="og:title"',title],['property="og:description"',description],['property="og:url"',canonical]])html=html.replace(new RegExp('<meta '+selector+' content="[^"]*">'),()=>`<meta ${selector} content="${escapeAttr(value)}">`);
+ html=html.replace(/<link rel="canonical" href="[^"]*">/,()=>`<link rel="canonical" href="${escapeAttr(canonical)}">`);
+ if(p.photoURL)html=html.replace('</head>',()=>`<meta property="og:image" content="${escapeAttr(p.photoURL)}"></head>`);
+ html=html.replace('<div class="state" role="status">Carregando perfil público…</div>',()=>`<div class="state" role="status"><h1>${escapeHtml(p.name||p.username)}</h1><p>@${escapeHtml(p.username)}</p><p>${escapeHtml(p.bio||'Perfil público na Zytrix.')}</p></div>`);
  // Public projection only. Escape script terminators, even though this is inert JSON.
  const json=JSON.stringify(state).replace(/[<>&\u2028\u2029]/g,char=>'\\u'+char.charCodeAt(0).toString(16).padStart(4,'0'));
- return html.replace('<script type="module" src="/assets/js/public-profile.js">',`<script type="application/json" id="public-profile-data">${json}</script><script type="module" src="/assets/js/public-profile.js">`);
+ return html.replace('<script type="module" src="/assets/js/public-profile.js">',()=>`<script type="application/json" id="public-profile-data">${json}</script><script type="module" src="/assets/js/public-profile.js">`);
 }
 export function createProfilePageHandler({pool=platformPool,enabled=platformEnabled,allow=allowProfileRead,template=()=>readFile(join(process.cwd(),'usuario.html'),'utf8')}={}){
  return async(req,res)=>{
