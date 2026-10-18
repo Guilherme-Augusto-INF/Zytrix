@@ -5,6 +5,7 @@ import { header, footer, escapeHtml, escapeAttr } from './ui.js';
 import { reportLink, reportsAvailable } from './report-link.js';
 import { createChatReportActions } from './chat-report-actions.js';
 import { getStreamingEmbed, streamingPlatformLabel } from './streaming.js';
+import { createLiveViewTracker } from './analytics-events.js';
 import { safeImageUrl } from './security.js';
 header('ao-vivo');
 footer();
@@ -32,6 +33,12 @@ let pinnedMessageId = '';
 // Viewer-count updates must not reconstruct the iframe, chat or user input.
 let lastLiveLayoutSignature = '';
 let liveSnapshotVersion = 0;
+// Count opening a valid live page, not guaranteed video playback in the external iframe.
+const maybeTrackLiveView = createLiveViewTracker(
+    (name, fields) => window.zytrixTrackEvent?.(name, fields),
+    getStreamingEmbed
+);
+window.addEventListener('zytrix:analytics-consent-granted', () => maybeTrackLiveView(stream));
 const roleCache = new Map();
 const profileCache = new Map();
 // ==================================================
@@ -742,6 +749,7 @@ else {
         }
         lastLiveLayoutSignature = layoutSignature;
         render();
+        maybeTrackLiveView(stream);
     }, error => {
         console.error('Erro ao carregar live:', error);
         root.innerHTML = '<div class="state">Erro ao carregar live.</div>';
