@@ -1,5 +1,46 @@
 # Auditoria Snyk — Zytrix Lives — 2026-10-13
 
+## Revisão adicional — 18/10/2026
+
+Esta seção prevalece sobre as evidências históricas abaixo. A main foi confirmada em `f19047213c716c78d2c8be8c2de12c5d1df28364`, com a PR #33 merged. A implantação existente desse SHA está READY na Vercel, target production; esta revisão não criou nem promoveu implantação de produção.
+
+As duas branches incorporaram main. O conflito de platform na #32 foi resolvido mantendo o reader limitado antes de autenticação e os limites de leitura pública da main. Um conflito adicional entre fixtures de sessão das PRs foi eliminado com uma fixture comum. A combinação dos códigos foi validada em checkout detached temporário: lint, typecheck, build, AEO/GEO e 109 testes aprovados, 0 falhas, 4 integrações opt-in ignoradas nessa execução padrão. Nenhum merge de PR ou atualização da main foi feito.
+
+### Evidências atuais
+
+- Node 24.20.0 / npm 11.19.0 no Windows; npm ci concluído para main e ambas as branches, sem alterar configurações de instalação ou segredos.
+- #32: lint, typecheck, build e AEO/GEO PASS; suíte padrão 103 testes, 100 PASS / 3 SKIP / 0 FAIL.
+- #34: lint, typecheck, build e AEO/GEO PASS; suíte padrão 105 testes, 101 PASS / 4 SKIP / 0 FAIL.
+- As integrações opt-in foram executadas separadamente: canal em `br-little-wildflower-b6n0uvub`, imagens em `br-rapid-queen-b6hc5x1h`, leituras restritas e perfis em `br-solitary-math-b65n1owo`. Driver pg com TLS validado, papel real `zytrix_runtime`. PASS para criação concorrente/rollback de canal, ownership, substituição/exclusão de imagens, referências derivadas, falha do storage simulado, cotas, leituras simultâneas, exclusividade de mutações e dados próprios. Blob real não foi acessado.
+- #34: integração real PASS para resolução case-insensitive, nome aposentado indisponível inclusive para o dono anterior, disputa pelo mesmo nome e tentativa de tomar nome durante sua aposentadoria (espera antes do commit e rejeição 23505 depois), conta desativada, GET/HEAD e redirect legado. Exclusão de conta com trigger006 passou em transação com rollback; não houve exclusão persistente de conta.
+- Migração006 reaplicada apenas dentro de transação descartável na branch isolada, com owner; DDL e locks válidos, security definer, search_path=pg_catalog e trigger habilitado confirmados, seguido de rollback. O runtime não pode inserir/apagar reservas nem executar diretamente a função de trigger; permissões por coluna em profiles preservadas. Não foi executada migração em banco ativo de produção.
+- Navegador real: fixture do chat com 15 verificações PASS em 870px e 390px (foco, teclado, Escape/Tab/clique externo, instância única, rerender, sem HTML injetado e sem overflow). Perfil com PostgreSQL isolado: HTML inicial, hidratação anônima e consulta de seguidores PASS; layout em 390px/320px verificado. Viewports não certificam touch físico, player ou ações autenticadas.
+- Main: lint/typecheck/build PASS; suíte Windows 95 testes, 90 PASS / 2 FAIL / 3 SKIP. As duas falhas eram extração de imports por regex que não aceitava CRLF na fixture de sessão; corrigidas e testadas nas duas PRs. Isso não foi ocultado como PASS da main.
+- npm audit retornou zero advisories. Reproduções limitadas ainda mostram 257 issues Zod para 256 elementos e poisoning do objeto retornado pelo Deepmerge, sem alteração de Object.prototype. Zero no npm audit não certifica ausência desses alertas Snyk.
+
+### Correções adicionais
+
+#32 ganhou teste HTTP real de request chunked acima do limite, confirmando 413 sem reset do socket e preservando resposta segura. As fixtures de sessão e de navegador agora funcionam com CRLF e paths Windows.
+
+#34 corrigiu interpretação de $&, $\`, $' e $$ nas substituições SSR: nome/bio agora são inseridos literalmente por callbacks, com escaping e round-trip de JSON cobertos por regressão. A exclusão passou a usar tombstone aleatório (96 bits), impedindo reserva antecipada de um nome determinístico para negar a exclusão; UUID interno permanece. A largura de 320px revelou texto escapando do cartão: username agora quebra, e conteúdo/botões se reorganizam abaixo de 400px.
+
+### Dependências e bloqueios de prontidão
+
+- Better Auth: SDK oficial Neon0.6.0-beta continua fixando Better Auth1.7.6. O advisory upstream GHSA-q84f-53jg-9ppm recomenda1.7.0+ para o plugin opt-in de device authorization. O upstream consultado diz “No known CVE”; o rótulo CVE-2026-109346 da investigação anterior não foi certificado por essa fonte. A versão do servidor gerenciado não é provada pela versão npm.
+- Zod: atualização do advisory em18/10 indica correção em4.6.6+, confirmada no registry. O SDK Neon atual fixa4.5.4; cli-config fixa4.1.11. Nenhuma substituição fora dos contratos do fornecedor, override ou atualização transitiva forçada foi aplicada. Exige atualização compatível oficial ou decisão explícita de aceitação do risco residual; limites próprios não protegem requests diretos ao Auth hospedado.
+- Deepmerge: advisory ainda informa ausência de versão corrigida. Mantida análise de alcance: não executado nos caminhos HTTP próprios nem no bundle vanilla examinado, mas ainda instalado transitivamente. Sem ignore/supressão.
+- Peers transitivos da UI seguem inconsistentes em npm ls; não foram escondidos com legacy-peer-deps. A UI não é usada pelo aplicativo, mas a compatibilidade oficial do conjunto segue pendente.
+- Preview #34 anterior, verificado pelo acesso autenticado do conector Vercel: perfil público200 e config503/neon_not_configured. Issuer pin e CSP continuam restritos ao Auth provisionado originalmente, bloqueando o Auth isolado. Não apontamos testes de login ao Auth ativo nem ampliamos allowlists para tornar testes verdes.
+- Google OAuth, OTP/SMTP, reset e revogação de sessão reais em ambiente isolado, além de E2E autenticado e Blob real, continuam sem certificação. São necessários configuração Auth isolada aprovada, contas de teste e acesso ao e-mail/OAuth; contratos simulados não substituem esses testes.
+- CI/Vercel/Snyk devem ser conferidos no SHA final de cada PR. SUCCESS Snyk não equivale a zero findings nem substitui inventário autenticado detalhado.
+
+As PRs permanecem em rascunho até resolver esses bloqueios. Ordem recomendada quando aprovadas: #32, depois #34; executar006 somente como etapa de release separadamente autorizada. Rollback da #34 deve manter reservas/trigger; remover a proteção reabre apropriação de nomes aposentados.
+
+Fontes reconsultadas: [Better Auth](https://github.com/better-auth/better-auth/security/advisories/GHSA-q84f-53jg-9ppm), [Zod/Snyk](https://security.snyk.io/vuln/SNYK-JS-ZOD-20510278), [Deepmerge/Snyk](https://security.snyk.io/vuln/SNYK-JS-DEEPMERGE-19964053).
+
+## Evidências históricas da revisão anterior
+
+
 ## Escopo e resultado
 
 Base: `main` em `c9123938119a743e5e4763b6d635cab01d1708d1` (PRs recentes #28–#30: imagens e contenção de leituras). Branch: `security/snyk-remediation-2026-10`. Sem alterações no banco, no serviço Neon Auth, em transações reais ou na produção. Implementação diretamente no Work, sem delegação.
