@@ -23,5 +23,9 @@ export function renderStaticLayout(html, filename) {
     }
     if (filename === 'categorias.html') html = fillDiv(html, /<div\b[^>]*\bid="categories-grid"[^>]*>/, categoryMarkup());
     if (filename === 'ao-vivo.html') html = fillDiv(html, /<div\b[^>]*\bid="filters"[^>]*>/, filterMarkup());
+    // Basic Consent Mode: do not load Google until visitor opts in.
+    if (/<\/head>/i.test(html) && /<body\b/i.test(html) && !html.includes('data-zytrix-gtm-consent')) {
+        html = html.replace(/<head\b[^>]*>/i, match => match + '\n  <link data-zytrix-gtm-consent rel="stylesheet" href="/assets/css/gtm-consent.css">\n  <script src="/assets/js/gtm-consent.js" defer></script>');
+    }
     return html;
 }
