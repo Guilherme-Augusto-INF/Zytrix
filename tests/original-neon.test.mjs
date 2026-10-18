@@ -1,12 +1,14 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';
 import {executePlatform} from '../server/neon/platform.mjs';
 import vm from 'node:vm';
+import {strongPassword} from '../assets/js/security.js';
+import {neonAuthMessage} from '../assets/js/neon-auth-errors.js';
 const noDb={query(){throw Error('Unexpected access');}};
 async function authAdapter(fetchImpl,platformImpl=async()=>({uid:'preserved',enrollmentRequired:false})){
  const stored=new Map(),redirects=[];
  const source=(await readFile(new URL('../assets/js/neon-browser.js',import.meta.url),'utf8'))
   .replace(/^import .*;$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:class|function|const))/g,'');
- const context=vm.createContext({console,AbortSignal,URL,atob,queueMicrotask,fetch:fetchImpl,
+ const context=vm.createContext({console,AbortSignal,URL,atob,queueMicrotask,strongPassword,fetch:fetchImpl,
   localStorage:{getItem:()=>null,removeItem(){},setItem(){}},BroadcastChannel:undefined,location:{href:'https://staging.invalid/login.html',assign:value=>redirects.push(value)},sessionStorage:{getItem:key=>stored.get(key),setItem:(key,value)=>stored.set(key,value),removeItem:key=>stored.delete(key)},
   createManagedClient:base=>({$fetch:async(path,options)=>{const r=await fetchImpl(base+path,{...options,...(options.body?{body:JSON.stringify(options.body)}:{})});return r.ok?{data:await r.json()}:{error:{...await r.json(),status:r.status}};}}),
   createPlatformClient:()=>platformImpl,watchRealtime:()=>()=>{}});
@@ -16,6 +18,40 @@ async function authAdapter(fetchImpl,platformImpl=async()=>({uid:'preserved',enr
 }
 const response=value=>({ok:true,json:async()=>value});
 const authConfig=response({postgresEnabled:true,authentication:'neon',neonAuthUrl:'https://staging.invalid/auth'});
+
+test('new password writes validate before network access across signup, reset and change',async()=>{
+ for(const path of ['sign-up/email','reset-password','change-password','set-password']){
+  const calls=[];
+  const adapter=await authAdapter(async(url,options)=>{calls.push({url,options});return url==='/api/v1/config'?authConfig:response({status:true});});
+  const field=path==='sign-up/email'?'password':'newPassword';
+  for(const length of [7,8,9,10,128,129]){
+   for(const password of ['a'.repeat(length-1)+'1','a'.repeat(length),'1'.repeat(length),'!'.repeat(length)]){
+    const before=calls.length,body={[field]:password,currentPassword:'old',token:'test-only'};
+    if(strongPassword(password)){
+     await adapter.authRequest(path,body);
+     assert.equal(calls.at(-1).url,'https://staging.invalid/auth/'+path);
+     assert.deepEqual(JSON.parse(calls.at(-1).options.body),body);
+    }else{
+     await assert.rejects(adapter.authRequest(path,body),e=>e.code==='INVALID_PASSWORD_POLICY');
+     assert.equal(calls.length,before,'invalid password must never reach the provider');
+    }
+   }
+  }
+ }
+});
+
+test('existing short passwords still reach sign-in unchanged',async()=>{
+ const calls=[];
+ const adapter=await authAdapter(async(url,options)=>{if(url==='/api/v1/config')return authConfig;calls.push({url,options});return response(null);});
+ await adapter.signInWithEmailAndPassword(adapter.auth,'fixture@example.invalid','old');
+ assert.equal(calls[0].url,'https://staging.invalid/auth/sign-in/email');
+ assert.equal(JSON.parse(calls[0].options.body).password,'old');
+});
+
+test('password errors describe the same policy for registration and recovery',()=>{
+ for(const step of ['register','password'])for(const code of ['INVALID_PASSWORD_POLICY','PASSWORD_TOO_SHORT','PASSWORD_TOO_LONG'])
+  assert.equal(neonAuthMessage({code},step),'Use uma senha de 8 a 128 caracteres, incluindo pelo menos uma letra e um número.');
+});
 test('temporary session outages preserve the confirmed identity, while rejection clears it',async()=>{
  let failure;
  const a=await authAdapter(async url=>{
@@ -106,7 +142,7 @@ test('logout does not hide an actual revocation service outage',async()=>{
 test('verification-required signup returns a pending account without inventing a session or enrolling',async()=>{
  let sessionReads=0,enrollments=0;
  const a=await authAdapter(async url=>{if(url==='/api/v1/config')return authConfig;if(url.endsWith('/sign-up/email'))return response({user:{id:'new',email:'fixture@example.invalid',emailVerified:false},token:null});sessionReads++;return response(null);},async()=>{enrollments++;});
- const result=await a.createUserWithEmailAndPassword(a.auth,'fixture@example.invalid','fixture-only');
+ const result=await a.createUserWithEmailAndPassword(a.auth,'fixture@example.invalid','fixture-only1');
  assert.equal(result.user.pendingVerification,true);assert.equal(result.user.email,'fixture@example.invalid');assert.equal(a.auth.currentUser,null);assert.equal(sessionReads,0);assert.equal(enrollments,0);assert.equal(result.user.getIdToken,undefined);
 });
 

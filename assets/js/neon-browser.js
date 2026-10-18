@@ -1,6 +1,7 @@
 import { createPlatformClient } from './staging-client.js';
 import { watchRealtime } from './realtime-client.js';
 import { createManagedClient } from './neon-managed-client.js';
+import { strongPassword } from './security.js';
 export const app = null, db = Object.freeze({ backend: 'neon' }), googleProvider = { providerId: 'google.com' };
 export const auth = { currentUser: null };
 export class GoogleAuthProvider {
@@ -13,6 +14,10 @@ const platform = createPlatformClient(() => auth.currentUser);
 async function config() { return configPromise ??= fetch('/api/v1/config', { cache: 'no-store' }).then(async (r) => { const c = await r.json(); if (!r.ok || !c.postgresEnabled || c.authentication !== 'neon' || !c.neonAuthUrl)
     throw Error('neon_auth_not_configured'); return c; }); }
 export async function authRequest(path, body) {
+    // Validate only new passwords; existing credentials remain valid for sign-in.
+    const passwordField = path === 'sign-up/email' ? 'password' : ['reset-password', 'change-password', 'set-password'].includes(path) ? 'newPassword' : null;
+    if (passwordField && (typeof body?.[passwordField] !== 'string' || !strongPassword(body[passwordField])))
+        throw Object.assign(Error('invalid_password'), { code: 'INVALID_PASSWORD_POLICY' });
     const c = await config();
     // Managed OAuth requires Neon's verifier exchange and cookie handling. Always
     // fetch a fresh session before deriving the current identity.
