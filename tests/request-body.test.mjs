@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Readable} from 'node:stream';
+import http from 'node:http';
 import {readBoundedBody,readJsonBody,assertJsonStructure,PLATFORM_BODY_BYTES,CHECKOUT_BODY_BYTES} from '../server/neon/request-body.mjs';
 import platform,{config as platformConfig} from '../api/v1/platform.js';
 import checkout,{config as checkoutConfig} from '../api/v1/checkout.js';
@@ -8,6 +9,21 @@ import checkout,{config as checkoutConfig} from '../api/v1/checkout.js';
 function request(body,headers={}){const req=Readable.from(body);req.headers={'content-type':'application/json',...headers};req.method='POST';return req;}
 function response(){return {setHeader(){},status(code){this.code=code;return this;},json(body){this.body=body;return this;}};}
 const invalid=e=>e.code==='invalid_input'&&e.status===400;
+test('chunked HTTP overflow returns 413 without resetting the response socket',async()=>{
+ const server=http.createServer(async(req,res)=>{
+  try{await readJsonBody(req,32);res.writeHead(200).end();}
+  catch(e){res.writeHead(e.status??500,{'Content-Type':'application/json','Connection':'close'}).end(JSON.stringify({error:e.code}));}
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ try{
+  const result=await new Promise((resolve,reject)=>{
+   const req=http.request({host:'127.0.0.1',port:server.address().port,method:'POST',headers:{'Content-Type':'application/json','Transfer-Encoding':'chunked'}},res=>{
+    let body='';res.on('data',chunk=>body+=chunk);res.on('end',()=>resolve({status:res.statusCode,body:JSON.parse(body)}));res.on('error',reject);
+   });req.on('error',reject);req.setTimeout(5000,()=>req.destroy(Error('HTTP timeout')));req.write(Buffer.alloc(33,32));req.end();
+  });
+  assert.deepEqual(result,{status:413,body:{error:'body_too_large'}});
+ }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+});
 test('stream budgets reject declared and actual bytes before JSON parsing',async()=>{
  let consumed=false;
  await assert.rejects(readJsonBody({headers:{'content-length':'16385'},async *[Symbol.asyncIterator](){consumed=true;yield '{}';}},PLATFORM_BODY_BYTES),e=>e.status===413);
