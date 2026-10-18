@@ -1,12 +1,15 @@
 import { reportAvailability } from './report-service.js';
 import { validTargetId } from './report-model.js';
 let availability;
+export function reportsAvailable() {
+    availability ??= reportAvailability();
+    return availability;
+}
 export async function reportLink(root, targetType, targetId, contextId = '-', placement = 'after') {
     if (!root || !validTargetId(targetId))
         return;
     try {
-        availability ??= reportAvailability();
-        if (!await availability || !root.isConnected)
+        if (!await reportsAvailable() || !root.isConnected)
             return;
     }
     catch {
