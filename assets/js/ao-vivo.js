@@ -27,7 +27,8 @@ function render() {
         return !term || normalize([live.username, live.title, live.description, live.categoryId].join(' ')).includes(term);
     });
     grid.innerHTML = list.length ? list.map(liveCard).join('') : '<div class="state">Nenhuma transmissão encontrada.</div>';
-    grid.querySelectorAll('.live-card').forEach(card => card.addEventListener('click', () => {
+    grid.querySelectorAll('.live-card').forEach(card => card.addEventListener('click', event => {
+        if(event.target.closest('a,button'))return;
         const live = lives.find(item => item.id === card.dataset.liveId);
         if (!live)
             return;

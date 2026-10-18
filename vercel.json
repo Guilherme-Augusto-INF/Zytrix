@@ -1,7 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "outputDirectory": "public",
-  "regions": ["gru1"],
+  "regions": [
+    "gru1"
+  ],
   "cleanUrls": false,
   "trailingSlash": false,
   "headers": [
@@ -61,6 +63,15 @@
         {
           "key": "X-Robots-Tag",
           "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/usuario(.html)?",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, follow"
         }
       ]
     }
@@ -165,6 +176,10 @@
     {
       "source": "/moderacao",
       "destination": "/moderacao.html"
+    },
+    {
+      "source": "/usuario",
+      "destination": "/usuario.html"
     }
   ],
   "buildCommand": "npm run build",

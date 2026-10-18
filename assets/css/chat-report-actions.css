@@ -1,0 +1,40 @@
+.chat-message.has-report-actions .chat-message-body { padding-inline-end: 34px; }
+.chat-message .chat-message-meta > .profile-link { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-message.has-report-actions .chat-delete { right: 38px; }
+.chat-message.has-report-actions .chat-mod-tools { right: 62px; }
+.chat-message > .chat-report-trigger {
+    position: absolute; inset-block-start: 4px; inset-inline-end: 4px;
+    display: grid; place-items: center; width: 32px; height: 32px;
+    padding: 0; border: 1px solid #334155; border-radius: 7px;
+    background: #101824; color: #cbd5e1; font-size: 22px; line-height: 1;
+    opacity: 0; pointer-events: none; cursor: pointer; transition: opacity 150ms ease;
+}
+.chat-message:hover > .chat-report-trigger,
+.chat-message:focus-within > .chat-report-trigger,
+.chat-message.chat-report-open > .chat-report-trigger { opacity: 1; pointer-events: auto; }
+.chat-message > .chat-report-trigger:hover { background: #263449; }
+.chat-report-menu {
+    position: fixed; z-index: 1000; box-sizing: border-box;
+    width: max-content; max-width: calc(100vw - 16px); overflow: auto;
+    padding: 4px; border: 1px solid #334155; border-radius: 8px;
+    background: #101824; color: #e2e8f0; box-shadow: 0 6px 20px #0006;
+}
+.chat-report-menu[hidden] { display: none; }
+.chat-report-menu > a {
+    display: flex; align-items: center; box-sizing: border-box;
+    min-height: 36px; padding: 8px 12px; border-radius: 5px;
+    color: #e2e8f0; font-size: 13px; text-decoration: none; overflow-wrap: anywhere;
+}
+.chat-report-menu > a:hover { background: #263449; }
+.chat-message > .chat-report-trigger:focus-visible,
+.chat-report-menu > a:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+@media (hover: none), (pointer: coarse), (max-width: 600px) {
+    .chat-message > .chat-report-trigger { opacity: 1; pointer-events: auto; width: 44px; height: 44px; }
+    .chat-message.has-report-actions .chat-message-body { padding-inline-end: 48px; }
+    .chat-message.has-report-actions .chat-delete { right: 50px; }
+    .chat-message.has-report-actions .chat-mod-tools { right: 74px; }
+    .chat-report-menu > a { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .chat-message > .chat-report-trigger { transition: none; }
+}

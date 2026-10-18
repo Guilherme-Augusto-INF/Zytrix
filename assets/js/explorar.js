@@ -149,14 +149,16 @@ function render() {
     bindControls();
 }
 function bindCards() {
-    document.querySelectorAll('.live-card').forEach(card => card.addEventListener('click', () => {
+    document.querySelectorAll('.live-card').forEach(card => card.addEventListener('click', event => {
+        if(event.target.closest('a,button'))return;
         const live = lives.find(item => item.id === card.dataset.liveId);
         if (!live)
             return;
         selectStream(live);
         location.href = `live.html?stream=${encodeURIComponent(live.id)}`;
     }));
-    document.querySelectorAll('[data-clip-id]').forEach(card => card.addEventListener('click', () => {
+    document.querySelectorAll('[data-clip-id]').forEach(card => card.addEventListener('click', event => {
+        if(event.target.closest('a,button'))return;
         const item = clips.find(clip => clip.id === card.dataset.clipId);
         if (!item)
             return;
