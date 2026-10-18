@@ -19,6 +19,26 @@ async function authAdapter(fetchImpl,platformImpl=async()=>({uid:'preserved',enr
 const response=value=>({ok:true,json:async()=>value});
 const authConfig=response({postgresEnabled:true,authentication:'neon',neonAuthUrl:'https://staging.invalid/auth'});
 
+test('self-hosted browser adapter uses same-origin Auth without the managed verifier protocol',async()=>{
+ const calls=[];
+ const adapter=await authAdapter(async(url,options)=>{
+  if(url==='/api/v1/config')return response({postgresEnabled:true,authentication:'better-auth',authUrl:'https://staging.invalid/api/auth'});
+  calls.push({url,options});return response({url:'https://accounts.google.com/oauth'});
+ });
+ await adapter.authRequest('get-session');await adapter.authRequest('sign-in/social',{provider:'google'});
+ assert.equal(calls[0].url,'https://staging.invalid/api/auth/get-session');
+ assert.equal(calls[0].options.credentials,'include');assert.equal(calls[0].options.headers['X-Force-Fetch'],undefined);
+ assert.equal(calls[1].url,'https://staging.invalid/api/auth/sign-in/social');
+ assert.equal(JSON.parse(calls[1].options.body).disableRedirect,true);
+});
+
+test('self-hosted browser config cannot redirect credentials to another origin',async()=>{
+ let requests=0;
+ const adapter=await authAdapter(async url=>{if(url==='/api/v1/config')return response({postgresEnabled:true,authentication:'better-auth',authUrl:'https://untrusted.invalid/api/auth'});requests++;return response({});});
+ await assert.rejects(adapter.authRequest('sign-in/email',{email:'fixture@example.invalid',password:'old'}),/auth_origin_invalid/);
+ assert.equal(requests,0);
+});
+
 test('new password writes validate before network access across signup, reset and change',async()=>{
  for(const path of ['sign-up/email','reset-password','change-password','set-password']){
   const calls=[];

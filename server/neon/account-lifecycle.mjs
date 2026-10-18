@@ -1,7 +1,8 @@
+import {expectedAuthProvider,sessionFunction} from '../auth/provider.mjs';
 import {ApiError} from './platform.mjs';
 // Caller owns the transaction. Retain internal IDs and all financial/moderation references.
 export async function deleteAccount(c,identity,data) {
- if(!identity||identity.authProvider!=='neon')throw new ApiError('authentication_required',401);
+ if(!identity||!expectedAuthProvider(identity))throw new ApiError('authentication_required',401);
  if(data.confirmation!=='EXCLUIR'||!/^[A-Za-z0-9_-]{16,100}$/.test(data.requestKey??''))throw new ApiError('invalid_input');
  await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['account:'+identity.subject]);
  const mapped=(await c.query('select user_id as id,deleted_at from public.user_accounts where user_id=$1::uuid for update',[identity.subject])).rows[0];
@@ -38,6 +39,6 @@ export async function deleteAccount(c,identity,data) {
  for(const table of ['user_preferences','notification_states','watch_history','user_progress','followed_categories','live_reactions'])await c.query(`delete from public.${table} where user_id=$1`,[user]);
  for(const table of ['live_viewer_sessions','live_unique_views','chat_rate_limits','reaction_rate_limits','report_rate_limits'])await c.query(`delete from private.${table} where user_id=$1`,[user]);
  await c.query("insert into private.account_deletions(user_id,request_key) values($1,$2)",[user,data.requestKey]);
- await c.query('select private.disable_auth_identity($1::uuid)',[identity.subject]);
+ await c.query(`select ${sessionFunction('disable')}($1::uuid)`,[identity.subject]);
  return {deleted:true,replayed:false};
 }

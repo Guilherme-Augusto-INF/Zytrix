@@ -1,3 +1,4 @@
+import {sessionFunction} from '../../server/auth/provider.mjs';
 import {authenticate} from '../../server/neon/auth.mjs';
 import {platformEnabled,platformPool} from '../../server/neon/platform-pool.mjs';
 import {executePlatform,ApiError} from '../../server/neon/platform.mjs';
@@ -17,7 +18,7 @@ export default async function handler(req,res){
  let sent=false,previous;const deadline=Math.min(Date.now()+20000,identity.expiresAt?identity.expiresAt*1000:Infinity);
  try{while(!closed&&Date.now()<deadline){let c;let snapshot;
    try{c=await platformPool().connect();await c.query('begin read only');
-     if(identity.authProvider==='neon'&&!(await c.query('select private.active_auth_session($1::uuid,$2) as active',[identity.subject,identity.sessionToken])).rows[0]?.active)throw new ApiError('authentication_required',401);
+     if(!(await c.query(`select ${sessionFunction()}($1::uuid,$2) as active`,[identity.subject,identity.sessionToken])).rows[0]?.active)throw new ApiError('authentication_required',401);
      const scoped=readContext(c);
      snapshot=liveId?{...(await executePlatform(scoped,identity,'live.get',{liveId})),...(await executePlatform(scoped,identity,'chat.list',{liveId}))}:await executePlatform(scoped,identity,'notifications.list');
      await c.query('commit');

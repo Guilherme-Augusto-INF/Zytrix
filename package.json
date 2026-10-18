@@ -18,9 +18,12 @@
     "@neondatabase/auth": "0.5.0-beta",
     "@vercel/blob": "2.8.1",
     "better-auth": "1.6.23",
+    "nodemailer": "10.1.7",
     "pg": "8.23.0",
     "sharp": "0.35.5",
-    "stripe": "22.6.2"
+    "stripe": "22.6.2",
+    "@better-auth/kysely-adapter": "1.6.23",
+    "kysely": "0.29.6"
   },
   "engines": {
     "node": ">=22"

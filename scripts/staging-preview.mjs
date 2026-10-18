@@ -19,6 +19,7 @@ http.createServer(async(req,res)=>{
  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  const pathname=new URL(req.url,'http://127.0.0.1').pathname;
  try{
+  if(pathname.startsWith('/api/auth/')){handlers[pathname]=(await import('../api/auth/[...path].js')).default;}
   if(handlers[pathname]){let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>(pathname==='/api/v1/stripe-webhook'?262144:16384)){res.writeHead(413);res.end();return;}chunks.push(Buffer.from(chunk));}
    req.rawBody=Buffer.concat(chunks);req.body=req.rawBody.toString('utf8');res.status=function(code){res.statusCode=code;return res;};res.json=function(value){res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));return res;};await handlers[pathname](req,res);return;}
   // Decoding can introduce traversal even when URL.pathname looked safe.

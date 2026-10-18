@@ -1,47 +1,38 @@
-# Preparação da migração para Better Auth próprio
+# Integração Better Auth e ensaio de preservação
 
-Status em 18/10/2026: preparação e ensaio, sem troca do provedor ativo. O usuário autorizou preparar a migração com testes de preservação antes da troca. Nenhuma rota da aplicação importa o candidato e nenhuma variável da implantação foi alterada.
+Status em 18/10/2026: integração implementada e validada na branch Neon `teste` (`br-sparkling-math-b6fz3kyb`). Produção continua com Neon Auth. O PR permanece em rascunho até concluir os critérios externos abaixo.
 
-## Motivo e solução
+## Comportamento
 
-O Neon Auth da branch de teste aceitou cadastro com `abcdefgh` e `12345678`. A [API de configuração](https://api-docs.neon.tech/reference/updateneonauthemailandpasswordconfig) não oferece composição de senha. Os [webhooks](https://neon.com/docs/auth/guides/webhooks) não incluem a senha e não fornecem eventos bloqueantes para redefinição/alteração. Validar somente num proxy continuaria permitindo chamadas diretas ao serviço antigo.
+Novas senhas exigem 8–128 caracteres, uma letra latina (incluindo acentos) e um dígito ASCII. O before hook do Better Auth 1.6.23 cobre cadastro, reset, alteração, definição inicial e escritas por OTP/admin. Login e reautenticação preservam credenciais antigas. A rota pública permite somente operações usadas pelo site; endpoints administrativos não são expostos.
 
-A solução preparada usa Better Auth 1.6.23 próprio, PostgreSQL no Neon e um [before hook](https://better-auth.com/docs/concepts/hooks) que rejeita novas senhas inválidas antes de qualquer escrita. O módulo `server/auth/candidate.mjs` é uma fábrica para ensaio; exige banco isolado, segredo, configuração Google e callbacks de entrega explícitos. Inclui OTP, admin, JWT e organizações, mas ainda precisa de comparação completa das políticas com o provedor ativo antes de virar um servidor de produção.
+`ZYTRIX_AUTH_PROVIDER` fica em `neon` por padrão. A opção `better-auth` ativa `/api/auth/*`, configuração pública no mesmo domínio, sessões, JWT com issuer/audience fixos e APIs da plataforma usando `zytrix_auth`. O backend verifica assinatura e sessão vigente no banco. Logout revoga a sessão. A rota limita corpos a 16 KiB e recusa POST de outra origem. Rate limits usam PostgreSQL.
 
-O hook cobre cadastro, redefinição por token, alteração, definição inicial, redefinição por OTP e escritas administrativas. Login e reautenticação não recebem a nova exigência. Contas sem senha, como vínculos Google, não são obrigadas a criar uma senha.
+O runtime exige configuração completa de Google, SMTP e segredo próprio. Consulte `docs/auth-environment.example`; não versionar valores reais. SMTP usa TLS e não registra códigos ou links. O papel `zytrix_auth_service` é exclusivo do Auth; a plataforma continua em `zytrix_runtime`, sem acesso aos hashes. Kysely qualifica o schema e funciona no pooler Neon sem parâmetros de startup `search_path`.
 
-## Preservação já verificada
+## Ensaio aplicado somente em teste
 
-- Inventário da branch ativa: um vínculo `credential` com hash e um vínculo `google`.
-- Ensaio PostgreSQL na branch `teste` (`br-sparkling-math-b6fz3kyb`), derivada de `clean-neon-20261007`: schema candidato `zytrix_auth_candidate_20261018`, um usuário, uma credencial de senha e um vínculo Google copiados. Não é uma cópia nova da branch ativa; é o estado existente da branch de teste.
-- A cópia compara todas as colunas de usuário e conta nos dois sentidos com `EXCEPT ALL`; hashes foram confirmados byte a byte. Os IDs de `public.identities` continuam presentes no candidato. O schema original e as referências ativas da aplicação não foram alterados.
-- `database/neon/rehearsal-auth-copy.sql` reproduz a cópia. Aplicar numa transação `REPEATABLE READ` somente na branch de teste. Falha se o schema já existe; não remove nem sobrescreve dados.
-- Testes com o handler real e adapter de memória preservam UUID, hash e vínculo Google de uma conta simulada durante startup e login com senha antiga de três caracteres. Uma senha inválida em reset/change não altera o hash. Uma senha válida é confirmada por novo login.
+`database/neon/rehearsal-auth-copy.sql` preserva o ensaio inicial em schema separado. `database/neon/self-auth-integration.sql` cria `zytrix_auth`, copia usuários, contas e organizações, compara todas as colunas de usuário/conta e verifica IDs existentes. Exige papel restrito provisionado previamente e transação `REPEATABLE READ`; falha se o schema já existir.
 
-Isso comprova a cópia dos dados reais e o comportamento das fixtures. Ainda não comprova login com a senha real do usuário migrado nem o fluxo OAuth real. Esses são critérios obrigatórios do ensaio remoto, não suposições de compatibilidade.
+O segundo script **altera a FK de `public.identities` e instala o provisionamento no schema novo dentro da branch de teste**. Não executar na branch ativa como migração comum. O schema `neon_auth` e os hashes originais foram preservados. A cópia contém um usuário, uma credencial e um vínculo Google anteriores ao ensaio. Fixtures adicionais são contas artificiais em `example.invalid`, somente em teste.
 
-## O que não deve ser importado automaticamente
+Sessões, verificações, links de recuperação e chaves JWT anteriores não são importados. Será necessário novo login. Os campos OAuth foram copiados, mas a portabilidade de tokens cifrados não foi presumida.
 
-Sessões, códigos de verificação, tokens de recuperação e chaves JWT do serviço antigo não foram copiados. A assinatura/encriptação pode depender de segredos do provedor. Planejar novo login, novos links de recuperação e novas chaves próprias. A cópia de contas preserva os campos OAuth, mas a portabilidade dos tokens armazenados ainda precisa ser verificada; não prometer que sejam decifráveis com outro segredo.
+## Testes reproduzíveis e evidências
 
-## Integração necessária antes da troca
+- `npm test`: frontend, fábrica real, handler HTTP e compatibilidade da aplicação.
+- `npm run lint`, `npm run typecheck`, `npm run build`.
+- `node scripts/integration-self-auth.mjs`: PostgreSQL real, carregando `.env.auth-db.local` ignorado pelo Git. Exige `DATABASE_URL` da plataforma e `ZYTRIX_AUTH_DATABASE_URL` do papel restrito, ambos da branch de teste. Nunca usar URLs de produção. `--serve` mantém o servidor para prova no navegador; encerrar depois do teste.
 
-1. Provisionar um papel PostgreSQL exclusivo para Auth, restrito ao schema candidato, e segredos de produção fora do Git. Manter `zytrix_runtime` restrito. Não usar credencial de dono do banco na aplicação.
-2. Montar um endpoint de ensaio para `auth.handler()` e cliente `better-auth/client`, com domínio confiável explícito. Integrar SMTP/OTP e reset sem registrar senhas, códigos, tokens ou hashes em logs. Configurar o callback Google no projeto OAuth existente, preservando o vínculo por ID de conta/provedor.
-3. Comparar as políticas atuais com o candidato: verificação por OTP, vínculo entre contas, banimentos, expiração/renovação de sessão, rate limits, recuperação e organizações. Os defaults do Better Auth não devem ser tratados como equivalentes automaticamente.
-4. Adaptar o cliente e as APIs de configuração, autenticação e JWT. A aplicação atual fixa o issuer Neon em `server/neon/neon-token.mjs` e usa o SDK gerenciado para sessões/OAuth; a troca exige alterações coordenadas. Não aceitar qualquer issuer recebido do cliente.
-5. Adaptar as consultas de Auth e `private.active_auth_session` para o schema novo. Reatribuir a FK de `public.identities` ao usuário candidato durante a troca. Preservar UUIDs, Zytrix IDs, perfis, carteira e ledger. Recriar o provisionamento de novos perfis somente depois de coordenar essa FK. `LIKE` não copia triggers nem todas as FKs; as FKs do candidato foram criadas explicitamente no ensaio.
-6. Testar no PostgreSQL isolado: login com credencial real preservada pelo proprietário; Google; OTP e reset entregues; signup/reset/change de 7, 8, 9, 10, 128 e 129 caracteres e sem letra/número; login legado; rotas privadas; logout e sessões expiradas; identidade e saldo sem alterações.
-7. Antes de expor o novo servidor, verificar o encerramento do serviço gerenciado antigo sem exclusão dos dados, em ambiente isolado. O Auth URL antigo deve parar de aceitar escritas; manter os dois serviços públicos permitiria contornar a regra. Não usar `disable_auth` com exclusão de dados nem confiar apenas em CORS.
+O ensaio PostgreSQL passou cadastro, OTP com entrega simulada, login legado de três caracteres, JWT, registro de identidade, carteira zero, recusa de acesso anônimo/forjado, alteração e reset com a matriz 7/8/9/10/128/129 e sem letra/número, além de revogação pelo logout. Os hashes anteriores ao ensaio permaneceram iguais. Auth não pôde atualizar carteiras; a plataforma não pôde ler hashes. No navegador, login da fixture de oito caracteres abriu o perfil privado e persistiu após recarregar. O controle do navegador se desconectou antes da confirmação visual de logout; a revogação foi comprovada pelo teste HTTP/PostgreSQL.
 
-## Troca e rollback
+Estes testes não enviam e-mails reais e não completam OAuth real. A geração do URL Google é testada, mas não comprova consentimento, callback nem acesso à conta migrada.
 
-A troca está pendente e não faz parte dos comandos de ensaio aplicados. Exige backup recuperável, janela curta sem escritas de autenticação, cópia final consistente e validação de contagens/IDs/hashes/vínculos. Só então aplicar referências, implantar cliente/API/novo Auth coordenadamente e validar os fluxos completos.
+## Pendências obrigatórias antes da troca
 
-Rollback antes da primeira escrita no novo provedor pode restaurar configuração e referências antigas. Depois de novas contas ou mudanças de senha, restaurar apenas um snapshot perderia alterações: é obrigatório reconciliar o delta com IDs preservados e tratar sessões/chaves separadamente. Não prometer rollback instantâneo após escritas.
+1. Preencher segredos Google e SMTP fora do Git. Registrar no cliente Google existente o callback `https://<domínio-de-ensaio>/api/auth/callback/google`. Validar entrega real de OTP/reset e login Google preservando UUID. O proprietário deve testar sua credencial preservada; não usar sua senha em automação.
+2. Comparar configurações operacionais atuais: expiração/renovação de sessão, rate limits, banimentos, vínculo de contas e organizações. Defaults do Better Auth não comprovam equivalência.
+3. Ensaiar desativação das escritas públicas do Auth antigo sem apagar usuários. O Neon gerenciado aceitou `abcdefgh` e `12345678`; enquanto aceitar escritas, a composição pode ser contornada. CORS não resolve. Não usar uma operação que exclua dados de Auth.
+4. Aprovar backup recuperável, janela sem escritas, cópia final consistente e conferência de contagens/IDs/hashes/vínculos; aplicar referências e implantação coordenadamente. Produção exige `ZYTRIX_MANAGED_AUTH_RETIRED=true`, declaração operacional definida somente após verificar o encerramento do endpoint antigo. A flag não desativa o serviço por si só.
 
-## Validação reproduzível
-
-`node --test tests/auth-migration.test.mjs` executa o handler real do Better Auth em memória, sem chamadas ao Neon/Google/SMTP. Cobre a matriz de senhas nos três fluxos, preservação de credencial antiga/vínculo Google, reset por OTP e rotas administrativas. Esses testes validam a fábrica candidata e o hook; não substituem o ensaio remoto e a integração com o Zytrix descritos acima.
-
-O PR permanece em rascunho até os critérios de integração e troca serem atendidos. A preparação não é uma declaração de que a migração está pronta para produção.
+Rollback antes de novas escritas pode restaurar configuração e referências antigas. Depois de cadastro ou mudança de senha no novo provedor, reconciliar o delta antes de voltar; restaurar apenas um snapshot perderia alterações. Nenhuma variável de implantação, conta ou senha de produção foi alterada.
