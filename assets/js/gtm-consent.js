@@ -24,6 +24,16 @@
       return choice === 'accepted' || choice === 'rejected' ? choice : null;
     } catch { return null; }
   }
+  // Only event-specific, non-identifying data can enter the GTM dataLayer.
+  window.zytrixTrackEvent = (name, fields = {}) => {
+    if (!active || readChoice() !== 'accepted' || name !== 'view_live')
+      return false;
+    const provider = fields?.stream_platform;
+    if (!['twitch', 'kick', 'youtube'].includes(provider))
+      return false;
+    window.dataLayer.push({ event: name, stream_platform: provider });
+    return true;
+  };
   function saveChoice(choice) {
     try { localStorage.setItem(KEY, choice); } catch { /* No persistent storage: ask again on next visit. */ }
   }
@@ -41,7 +51,10 @@
   function setChoice(choice) {
     const wasActive = active;
     saveChoice(choice);
-    if (choice === 'accepted') enableMetrics();
+    if (choice === 'accepted') {
+      enableMetrics();
+      window.dispatchEvent(new Event('zytrix:analytics-consent-granted'));
+    }
     if (choice === 'rejected' && wasActive) {
       // Already executed tags cannot be reliably unloaded. Revoke and reload.
       gtag('consent', 'update', { analytics_storage: 'denied' });
