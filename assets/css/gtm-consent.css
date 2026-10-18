@@ -1,0 +1,26 @@
+/* Analytics consent banner; no third-party styles or scripts. */
+.zytrix-cookie-panel {
+  position: fixed;
+  z-index: 2147483000;
+  inset: auto 16px 16px auto;
+  box-sizing: border-box;
+  width: min(420px, calc(100vw - 32px));
+  padding: 20px;
+  color: #edf4ff;
+  background: #111d30;
+  border: 1px solid #415675;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / .42);
+  font: 400 14px/1.5 system-ui, sans-serif;
+}
+.zytrix-cookie-panel h2 { color: #fff; margin: 0 0 8px; font-size: 18px; line-height: 1.35; }
+.zytrix-cookie-panel p { margin: 0 0 10px; color: #d6dfec; }
+.zytrix-cookie-panel a { color: #b6dcff; text-decoration: underline; }
+.zytrix-cookie-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.zytrix-cookie-actions button { flex: 1 1 145px; min-height: 44px; padding: 10px; border-radius: 8px; font: inherit; font-weight: 650; cursor: pointer; }
+.zytrix-cookie-reject { background: #1d2c43; border: 1px solid #72829b; color: #f3f7ff; }
+.zytrix-cookie-accept { background: #40b0ff; border: 1px solid #40b0ff; color: #081522; }
+.zytrix-cookie-settings { display: inline-block; margin: 8px; padding: 7px 10px; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 7px; cursor: pointer; font: 400 12px/1.4 system-ui, sans-serif; }
+.zytrix-cookie-settings-floating { position: fixed; bottom: 8px; left: 8px; z-index: 1000; color: #fff; background: #14253e; }
+.zytrix-cookie-actions button:focus-visible, .zytrix-cookie-settings:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+@media (max-width: 480px) { .zytrix-cookie-panel { inset: auto 12px 12px; width: auto; padding: 16px; } }
