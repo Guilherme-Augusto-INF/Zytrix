@@ -7,7 +7,7 @@ const fixture = '<!doctype html><html><head><title>Teste</title></head><body><ma
 test('GTM consent boot is injected on all full HTML documents without inline scripts', () => {
   const html = renderStaticLayout(fixture, 'faq.html');
   assert.match(html, /<script src="\/assets\/js\/gtm-consent\.js" defer><\/script>/);
-  assert.match(html, /<link rel="stylesheet" href="\/assets\/css\/gtm-consent\.css">/);
+  assert.match(html, /data-zytrix-gtm-consent rel="stylesheet" href="\/assets\/css\/gtm-consent\.css"/);
   assert.equal((html.match(/gtm-consent\.js/g) || []).length, 1);
   assert.ok(html.indexOf('gtm-consent.js') < html.indexOf('</head>'));
   assert.ok(!html.includes('googletagmanager.com/gtm.js'));
