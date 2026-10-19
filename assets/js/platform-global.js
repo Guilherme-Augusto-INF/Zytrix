@@ -16,24 +16,24 @@ function addPrimaryNavigation() {
         return false;
     if (!nav.querySelector('[data-platform-nav="explore"]')) {
         const explore = document.createElement('a');
-        explore.href = 'explorar.html';
+        explore.href = '/explorar';
         explore.dataset.platformNav = 'explore';
         explore.textContent = 'Explorar';
-        nav.insertBefore(explore, nav.querySelector('a[href="sobre.html"]') || null);
+        nav.insertBefore(explore, nav.querySelector('a[href="/sobre"]') || null);
     }
     if (!nav.querySelector('[data-platform-nav="clips"]')) {
         const clips = document.createElement('a');
-        clips.href = 'clips.html';
+        clips.href = '/clips';
         clips.dataset.platformNav = 'clips';
         clips.textContent = 'Clipes';
-        nav.insertBefore(clips, nav.querySelector('a[href="sobre.html"]') || null);
+        nav.insertBefore(clips, nav.querySelector('a[href="/sobre"]') || null);
     }
     return true;
 }
 function addFooterNavigation() {
     const top = document.querySelector('.footer-links');
     if (top) {
-        [['Explorar', 'explorar.html', 'explore'], ['Clipes', 'clips.html', 'clips'], ['Status', 'status.html', 'status'], ['Roadmap', 'roadmap.html', 'roadmap']].forEach(([label, href, key]) => {
+        [['Explorar', '/explorar', 'explore'], ['Clipes', '/clips', 'clips'], ['Status', '/status', 'status'], ['Roadmap', '/roadmap', 'roadmap']].forEach(([label, href, key]) => {
             if (top.querySelector(`[data-platform-footer="${key}"]`))
                 return;
             const link = document.createElement('a');
@@ -56,7 +56,7 @@ async function addCreatorCenter(uid) {
         const link = document.createElement('a');
         link.id = 'creator-center-nav';
         link.className = 'btn btn-ghost creator-center-nav';
-        link.href = 'creator-center.html';
+        link.href = '/creator-center';
         link.textContent = 'Criador';
         const profile = document.querySelector('#profile-nav');
         actions.insertBefore(link, profile || null);
