@@ -101,7 +101,7 @@ function renderSupportNotifications() {
           <span class="muted" style="display:block;margin-top:4px">${escapeHtml(formatSupportTime(transaction.createdAt))}</span>
         </div>
         ${streamId
-            ? `<a class="btn btn-ghost" href="live.html?stream=${encodeURIComponent(streamId)}">Ver transmissão</a>`
+            ? `<a class="btn btn-ghost" href="/live?stream=${encodeURIComponent(streamId)}">Ver transmissão</a>`
             : '<span class="muted">Apoio recebido</span>'}
       </article>
     `;
@@ -152,7 +152,7 @@ function renderFollowedChannels() {
           ${stream?.title ? `<span style="display:block;margin-top:4px">${escapeHtml(stream.title)}</span>` : ''}
         </div>
         ${live && stream?.id
-            ? `<a class="btn btn-primary" href="live.html?stream=${encodeURIComponent(stream.id)}">Assistir agora</a>`
+            ? `<a class="btn btn-primary" href="/live?stream=${encodeURIComponent(stream.id)}">Assistir agora</a>`
             : '<span class="muted">Sem transmissão ativa</span>'}
       </article>
     `;
@@ -195,7 +195,7 @@ onAuthStateChanged(auth, user => {
       <div class="card panel">
         <h2>Entre para ver suas notificações</h2>
         <p class="muted">Aqui aparecem lives de canais seguidos e apoios recebidos em Zy Coins.</p>
-        <a class="btn btn-primary" href="login.html">Entrar</a>
+        <a class="btn btn-primary" href="/login">Entrar</a>
       </div>
     `;
         return;
