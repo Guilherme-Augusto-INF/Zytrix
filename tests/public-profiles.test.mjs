@@ -11,7 +11,7 @@ test('public identifiers allow immutable UUIDs only and are normalized',async()=
  for(const value of [null,'','../admin','https://evil.test','1234',"' OR 1=1",['uid']]){
   assert.equal(publicProfileUrl(value),'');await assert.rejects(executePlatform(database([]),null,'profile.public',{uid:value}),e=>e instanceof ApiError&&e.code==='invalid_uid');
  }
- assert.equal(publicProfileUrl(uid),'/usuario.html?uid='+uid);
+ assert.equal(publicProfileUrl(uid),'/usuario?uid='+uid);
 });
 test('public projection excludes private fields and rejects unsafe image URLs',()=>{
  assert.deepEqual(Object.keys(publicFields(profile)),['uid','name','username','photoURL','bio','createdAt']);
