@@ -24,7 +24,7 @@ const profiles = new Map();
 const pendingProfiles = new Map();
 const gridKeys = new WeakMap();
 if (!cats.children.length)
-    cats.innerHTML = Object.keys(categories).map(c => `<a class="card category-card" href="categoria.html?categoria=${encodeURIComponent(c)}"><span class="category-icon">${icons[c]}</span><div><strong>${c}</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a>`).join('');
+    cats.innerHTML = Object.keys(categories).map(c => `<a class="card category-card" href="/categoria?categoria=${encodeURIComponent(c)}"><span class="category-icon">${icons[c]}</span><div><strong>${c}</strong><div class="muted" style="font-size:11px;margin-top:4px">Explorar conteúdo</div></div><span class="arrow">→</span></a>`).join('');
 function ensurePersonalizedSection() {
     let section = document.querySelector('#personalized-home');
     if (section)
@@ -153,7 +153,7 @@ function bindCards() {
             if (!live)
                 return;
             selectStream(live);
-            location.href = `live.html?stream=${encodeURIComponent(live.id)}`;
+            location.href = `/live?stream=${encodeURIComponent(live.id)}`;
         };
     });
 }
