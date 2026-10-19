@@ -95,7 +95,7 @@ export function hardenExternalImage(image, value) {
     image.decoding = image.decoding || 'async';
     return true;
 }
-export function localRedirect(value = '', fallback = 'index.html') {
+export function localRedirect(value = '', fallback = '/') {
     const text = String(value || '').trim();
     if (!text)
         return fallback;
