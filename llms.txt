@@ -13,15 +13,15 @@ A Zytrix organiza transmissões ao vivo e permite que visitantes descubram criad
 ## Páginas públicas principais
 
 - [Página inicial](https://zytrix-lives.vercel.app/): visão geral da Zytrix e destaques.
-- [Ao vivo](https://zytrix-lives.vercel.app/ao-vivo.html): transmissões ao vivo disponíveis na plataforma.
-- [Explorar](https://zytrix-lives.vercel.app/explorar.html): descoberta de conteúdo.
-- [Categorias](https://zytrix-lives.vercel.app/categorias.html): organização do conteúdo por categorias.
-- [Clips](https://zytrix-lives.vercel.app/clips.html): momentos marcados pela comunidade.
-- [Recursos](https://zytrix-lives.vercel.app/recursos.html): recursos e funcionalidades da plataforma.
-- [FAQ](https://zytrix-lives.vercel.app/faq.html): perguntas frequentes.
-- [Sobre](https://zytrix-lives.vercel.app/sobre.html): informações sobre o projeto e seu funcionamento.
-- [Status](https://zytrix-lives.vercel.app/status.html): estado dos principais serviços.
-- [Roadmap](https://zytrix-lives.vercel.app/roadmap.html): recursos concluídos, em validação e planejados.
+- [Ao vivo](https://zytrix-lives.vercel.app/ao-vivo): transmissões ao vivo disponíveis na plataforma.
+- [Explorar](https://zytrix-lives.vercel.app/explorar): descoberta de conteúdo.
+- [Categorias](https://zytrix-lives.vercel.app/categorias): organização do conteúdo por categorias.
+- [Clips](https://zytrix-lives.vercel.app/clips): momentos marcados pela comunidade.
+- [Recursos](https://zytrix-lives.vercel.app/recursos): recursos e funcionalidades da plataforma.
+- [FAQ](https://zytrix-lives.vercel.app/faq): perguntas frequentes.
+- [Sobre](https://zytrix-lives.vercel.app/sobre): informações sobre o projeto e seu funcionamento.
+- [Status](https://zytrix-lives.vercel.app/status): estado dos principais serviços.
+- [Roadmap](https://zytrix-lives.vercel.app/roadmap): recursos concluídos, em validação e planejados.
 
 ## Identidade
 

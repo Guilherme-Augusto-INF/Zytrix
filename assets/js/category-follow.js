@@ -20,7 +20,7 @@ function mount() {
     if (!user) {
         button.textContent = 'Entrar para seguir';
         button.classList.remove('is-following');
-        button.onclick = () => location.href = `login.html?redirect=${encodeURIComponent(location.pathname + location.search)}`;
+        button.onclick = () => location.href = `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
         return;
     }
     const active = followed.has(category);

@@ -34,7 +34,7 @@ function render() {
         <div class="eyebrow">Comunidade</div>
         <h2 style="margin:4px 0 0">Sua rede na Zytrix</h2>
       </div>
-      <a class="btn" href="notificacoes.html">Lives que sigo</a>
+      <a class="btn" href="/notificacoes">Lives que sigo</a>
     </div>
 
     <div class="social-stats">
@@ -63,7 +63,7 @@ function render() {
               </span>
             </div>
             ${channel.isLive && channel.currentStreamId
-            ? `<a class="btn btn-primary" href="live.html?stream=${encodeURIComponent(channel.currentStreamId)}">Assistir</a>`
+            ? `<a class="btn btn-primary" href="/live?stream=${encodeURIComponent(channel.currentStreamId)}">Assistir</a>`
             : ''}
           </div>
         `).join('')

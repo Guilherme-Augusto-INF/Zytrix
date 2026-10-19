@@ -13,7 +13,7 @@ grid.onclick = e => {
         return;
     const p = packages.find(x => x.id === b.dataset.package);
     localStorage.setItem('zytrixSelectedCoinPackage', JSON.stringify(p));
-    location.href = 'pagamento.html';
+    location.href = '/pagamento';
 };
 onAuthStateChanged(auth, async (u) => {
     user = u;

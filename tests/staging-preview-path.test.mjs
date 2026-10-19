@@ -4,6 +4,7 @@ import {resolve} from 'node:path';
 import {resolveSafePreviewPath} from '../scripts/staging-static-path.mjs';
 
 const root=resolve('hypothetical-zytrix-checkout');
+const realRoot=resolve(new URL('..',import.meta.url).pathname);
 test('local staging preview serves original V1 HTML screens and assets',()=>{
   assert.equal(resolveSafePreviewPath(root,'/'),resolve(root,'index.html'));
   for(const page of ['perfil','login','registro','config-live','creator-center','pagamento','clips'])
@@ -16,6 +17,11 @@ test('local staging preview serves original V1 HTML screens and assets',()=>{
     resolve(root,'assets/js/staging-validation.js'));
   assert.equal(resolveSafePreviewPath(root,'/assets/css/staging-validation.css'),
     resolve(root,'assets/css/staging-validation.css'));
+});
+test('local preview also resolves real clean URLs without exposing API files',()=>{
+  for(const page of ['login','perfil','registro','creator-center','admin','usuario','explorar'])
+    assert.equal(resolveSafePreviewPath(realRoot,'/'+page),resolve(realRoot,page+'.html'));
+  assert.equal(resolveSafePreviewPath(realRoot,'/api/v1/health'),null);
 });
 test('encoded traversal cannot expose app endpoints, SQL or private files',()=>{
   for(const attempt of [

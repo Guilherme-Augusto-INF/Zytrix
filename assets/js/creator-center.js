@@ -67,7 +67,7 @@ async function loadAll() {
         getDoc(doc(db, 'profiles', user.uid))
     ]);
     if (!channelSnap.exists()) {
-        root.innerHTML = '<div class="card panel"><h1>Centro do Criador</h1><p class="muted">Crie seu canal primeiro no Perfil para liberar este painel.</p><a class="btn btn-primary" href="perfil.html">Ir para o Perfil</a></div>';
+        root.innerHTML = '<div class="card panel"><h1>Centro do Criador</h1><p class="muted">Crie seu canal primeiro no Perfil para liberar este painel.</p><a class="btn btn-primary" href="/perfil">Ir para o Perfil</a></div>';
         return;
     }
     channel = { id: channelSnap.id, ...channelSnap.data() };
@@ -145,8 +145,8 @@ function render() {
         <h1 style="margin:5px 0">${escapeHtml(profile?.username || 'Streamer')}</h1>
         <p class="muted">Live, comunidade, alertas, moderação, agenda, recompensas e analytics em um único painel.</p>
         <div class="live-interaction-row">
-          <a class="btn btn-primary" href="config-live.html">Configuração rápida</a>
-          <a class="btn" href="live.html?stream=${encodeURIComponent(stream.id)}">Ver minha live</a>
+          <a class="btn btn-primary" href="/config-live">Configuração rápida</a>
+          <a class="btn" href="/live?stream=${encodeURIComponent(stream.id)}">Ver minha live</a>
         </div>
       </div>
       <div class="card panel">
@@ -546,7 +546,7 @@ function refreshOverviewNumbers() {
 }
 onAuthStateChanged(auth, current => {
     if (!current) {
-        location.href = `login.html?redirect=${encodeURIComponent('creator-center.html')}`;
+        location.href = `/login?redirect=${encodeURIComponent('/creator-center')}`;
         return;
     }
     user = current;
