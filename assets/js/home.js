@@ -88,15 +88,15 @@ function renderLives() {
         const followedLives = recommended.filter(item => following.has(item.streamerUid)).slice(0, 4);
         const recentLives = recommended.filter(item => recentStreamers.has(item.streamerUid) && !following.has(item.streamerUid)).slice(0, 4);
         personal.innerHTML = `
-      <div class="section-head"><div><div class="eyebrow">PARA VOCÊ</div><h2>Sua Zytrix</h2></div><a class="muted" href="explorar.html">Abrir Explorar →</a></div>
+      <div class="section-head"><div><div class="eyebrow">PARA VOCÊ</div><h2>Sua Zytrix</h2></div><a class="muted" href="/explorar">Abrir Explorar →</a></div>
       ${followedLives.length ? `<h3>Canais que você segue</h3><div class="grid grid-4">${followedLives.map(liveCard).join('')}</div>` : ''}
       ${recentLives.length ? `<h3 style="margin-top:18px">Continuar explorando</h3><div class="grid grid-4">${recentLives.map(liveCard).join('')}</div>` : ''}
-      ${!followedLives.length && !recentLives.length ? '<div class="card panel"><strong>Personalize sua Home</strong><p class="muted">Siga streamers e categorias para a Zytrix ordenar melhor suas recomendações.</p><a class="btn" href="explorar.html">Explorar agora</a></div>' : ''}
+      ${!followedLives.length && !recentLives.length ? '<div class="card panel"><strong>Personalize sua Home</strong><p class="muted">Siga streamers e categorias para a Zytrix ordenar melhor suas recomendações.</p><a class="btn" href="/explorar">Explorar agora</a></div>' : ''}
     `;
     }
     else if (personal.dataset.user) {
         delete personal.dataset.user;
-        personal.innerHTML = `<div class="card panel"><div class="eyebrow">PERSONALIZAÇÃO</div><h2>Uma Home que aprende com suas escolhas</h2><p class="muted">Entre na sua conta para priorizar canais seguidos, categorias favoritas e conteúdos recentes.</p><a class="btn btn-primary" href="login.html">Entrar</a></div>`;
+        personal.innerHTML = `<div class="card panel"><div class="eyebrow">PERSONALIZAÇÃO</div><h2>Uma Home que aprende com suas escolhas</h2><p class="muted">Entre na sua conta para priorizar canais seguidos, categorias favoritas e conteúdos recentes.</p><a class="btn btn-primary" href="/login">Entrar</a></div>`;
     }
     bindCards();
 }
