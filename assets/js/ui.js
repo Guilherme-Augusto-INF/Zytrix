@@ -17,7 +17,7 @@ export function header(active = '') {
         if (!guest || !profile)
             return;
         if (user) {
-            if(user.enrollmentRequired&&!document.body.hasAttribute('data-public-profile')&&!document.querySelector('[data-auth-form]')&&!location.pathname.endsWith('/sair.html')){location.replace('/login?redirect='+encodeURIComponent(location.pathname+location.search));return;}
+            if(user.enrollmentRequired&&!document.body.hasAttribute('data-public-profile')&&!document.querySelector('[data-auth-form]')&&!location.pathname.endsWith('/sair')){location.replace('/login?redirect='+encodeURIComponent(location.pathname+location.search));return;}
             guest.classList.add('hidden');
             profile.classList.remove('hidden');
         }
