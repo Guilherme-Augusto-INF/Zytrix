@@ -70,7 +70,7 @@ function showLiveToast(channel) {
     const toast = document.createElement('a');
     toast.id = 'zytrix-live-toast';
     toast.className = 'live-toast';
-    toast.href = streamId ? `live.html?stream=${encodeURIComponent(streamId)}` : 'ao-vivo.html';
+    toast.href = streamId ? `/live?stream=${encodeURIComponent(streamId)}` : 'ao-vivo.html';
     toast.innerHTML = `
     <strong>● ${escapeHtml(channel.channelName || 'Um canal que você segue')} está ao vivo</strong>
     <span>Toque para assistir na Zytrix.</span>
