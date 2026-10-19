@@ -20,5 +20,5 @@ test('profile button uses the authenticated server action and follows persisted 
  const message={},input={value:'https://www.twitch.tv/alanzoka',focus(){}},button={isConnected:true};let called;
  const uid='fixture';const context=vm.createContext({console,creatingChannel:false,user:{uid,emailVerified:true,reload:async()=>{},getIdToken:async()=>{}},document:{querySelector:s=>({'#streamer-msg':message,'#stream-url':input,'#be-streamer':button}[s])},parseStreamingSource,ownPlatform:async(...args)=>{called=args;return {channelId:uid,streamId:uid};},location:{href:''}});
  await vm.runInContext(fn+';createStreamer()',context);
- assert.equal(called[0],uid);assert.equal(called[1],'channel.create');assert.equal(called[2].playbackURL,input.value);assert.deepEqual(Object.keys(called[2]),['playbackURL']);assert.equal(context.location.href,'config-live.html');assert.equal(button.disabled,false);
+ assert.equal(called[0],uid);assert.equal(called[1],'channel.create');assert.equal(called[2].playbackURL,input.value);assert.deepEqual(Object.keys(called[2]),['playbackURL']);assert.equal(context.location.href,'/config-live');assert.equal(button.disabled,false);
 });
