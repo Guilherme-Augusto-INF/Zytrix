@@ -24,7 +24,7 @@ function render(items) {
         if (!live)
             return;
         selectStream(live);
-        location.href = 'live.html';
+        location.href = '/live';
     }));
 }
 const stopFeed = watchPublicLiveFeed({
