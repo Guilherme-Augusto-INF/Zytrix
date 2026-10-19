@@ -63,7 +63,7 @@ function render() {
               </span>
             </div>
             ${channel.isLive && channel.currentStreamId
-            ? `<a class="btn btn-primary" href="live.html?stream=${encodeURIComponent(channel.currentStreamId)}">Assistir</a>`
+            ? `<a class="btn btn-primary" href="/live?stream=${encodeURIComponent(channel.currentStreamId)}">Assistir</a>`
             : ''}
           </div>
         `).join('')
