@@ -6,7 +6,7 @@ export function initNeonAuthPage(form,show){
  if(!form)return;
  const mode=form.dataset.mode,platform=createPlatformClient(()=>auth.currentUser),extra=document.createElement('section');form.insertAdjacentElement('afterend',extra);
  const sender=verificationSender(sendEmailVerification),resetSender=verificationSender(user=>sendPasswordResetEmail(auth,user.email));
- const params=new URLSearchParams(location.search),destination=localRedirect(params.get('redirect'),'index.html');let submitting=false,timer;
+ const params=new URLSearchParams(location.search),destination=localRedirect(params.get('redirect'),'/');let submitting=false,timer;
  globalThis.addEventListener('pagehide',()=>clearInterval(timer),{once:true});
  async function finish(user){
   if(!user)return;
@@ -26,7 +26,7 @@ export function initNeonAuthPage(form,show){
   try{
    if(mode==='login')await finish((await signInWithEmailAndPassword(auth,email,password)).user);
    if(mode==='register'){const username=String(fields.get('username')??'').trim();if(!/^[A-Za-z0-9_.-]{2,30}$/.test(username)||!strongPassword(password))throw Error('invalid_signup');sessionStorage.setItem('zytrixSignupUsername',username);const result=await createUserWithEmailAndPassword(auth,email,password);await finish(result.user);try{await sender.request(result.user);show('Conta criada. Verifique o código enviado ao seu e-mail.','ok');}catch(error){show('Conta criada. '+neonAuthMessage(error,'send'));}}
-   if(mode==='reset'){const token=params.get('token');if(token){step='password';if(!strongPassword(password))throw Error('invalid_signup');await authRequest('reset-password',{token,newPassword:password});show('Senha atualizada. Voltando ao login.','ok');setTimeout(()=>location.assign('login.html'),1200);}else{await resetSender.request({email});show('Se existir uma conta elegível, enviaremos as instruções de recuperação.','ok');}}
+   if(mode==='reset'){const token=params.get('token');if(token){step='password';if(!strongPassword(password))throw Error('invalid_signup');await authRequest('reset-password',{token,newPassword:password});show('Senha atualizada. Voltando ao login.','ok');setTimeout(()=>location.assign('/login'),1200);}else{await resetSender.request({email});show('Se existir uma conta elegível, enviaremos as instruções de recuperação.','ok');}}
   }catch(error){if(mode==='login'&&error.code==='EMAIL_NOT_VERIFIED')await finish({email,emailVerified:false});show(error.message==='invalid_signup'?'Use um username válido e senha com 10 caracteres, letra e número.':neonAuthMessage(error,step));}finally{submitting=false;if(button)button.disabled=false;if(form.elements.password)form.elements.password.value='';}
  });
  if(mode==='reset'&&params.has('token')){
