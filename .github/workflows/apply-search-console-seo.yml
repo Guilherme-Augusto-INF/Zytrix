@@ -97,27 +97,9 @@ jobs:
 
           vercel_path = Path('vercel.json')
           config = json.loads(vercel_path.read_text(encoding='utf-8'))
-          config['cleanUrls'] = False
+          config['cleanUrls'] = True
           config['trailingSlash'] = False
-          config['rewrites'] = [
-              {'source': '/ao-vivo', 'destination': '/ao-vivo.html'},
-              {'source': '/categorias', 'destination': '/categorias.html'},
-              {'source': '/categoria', 'destination': '/categoria.html'},
-              {'source': '/live', 'destination': '/live.html'},
-              {'source': '/recursos', 'destination': '/recursos.html'},
-              {'source': '/faq', 'destination': '/faq.html'},
-              {'source': '/sobre', 'destination': '/sobre.html'},
-              {'source': '/login', 'destination': '/login.html'},
-              {'source': '/registro', 'destination': '/registro.html'},
-              {'source': '/recuperar-senha', 'destination': '/recuperar-senha.html'},
-              {'source': '/perfil', 'destination': '/perfil.html'},
-              {'source': '/config-live', 'destination': '/config-live.html'},
-              {'source': '/loja', 'destination': '/loja.html'},
-              {'source': '/pagamento', 'destination': '/pagamento.html'},
-              {'source': '/sair', 'destination': '/sair.html'},
-              {'source': '/notificacoes', 'destination': '/notificacoes.html'},
-              {'source': '/admin', 'destination': '/admin.html'},
-          ]
+          config.pop('rewrites', None)
           vercel_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
       - name: Verificar arquivo do Google e SEO
