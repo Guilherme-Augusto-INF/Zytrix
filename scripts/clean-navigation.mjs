@@ -1,10 +1,10 @@
 // Only real root-level HTML pages are eligible for URL normalization.
 // Never rewrite assets, APIs, external origins, fragments or user-provided paths.
 export function normalizePageUrl(value, htmlFiles) {
-  const match = /^(https:\/\/zytrix-lives\.vercel\.app|\.?\/|)([a-z0-9-]+)\.html([?#].*)?$/i.exec(value);
+  const match = /^(https:\/\/zytrix-lives\.vercel\.app\/|\.?\/|)([a-z0-9-]+)\.html([?#].*)?$/i.exec(value);
   if (!match || !htmlFiles.has(match[2] + '.html')) return value;
   const path = match[2].toLowerCase() === 'index' ? '/' : '/' + match[2];
-  const origin = match[1] === 'https://zytrix-lives.vercel.app' ? match[1] : '';
+  const origin = match[1] === 'https://zytrix-lives.vercel.app/' ? match[1].slice(0, -1) : '';
   return origin + path + (match[3] || '');
 }
 
