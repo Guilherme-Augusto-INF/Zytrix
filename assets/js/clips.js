@@ -57,7 +57,7 @@ async function shareClip(id) {
     const item = clips.find(clip => clip.id === id);
     if (!item)
         return;
-    const url = new URL('clips.html', location.href);
+    const url = new URL('/clips', location.href);
     url.searchParams.set('clip', id);
     const data = { title: item.title || 'Clipe Zytrix', text: `Veja este momento de uma live na Zytrix (${timeLabel(item.momentSeconds)}).`, url: url.toString() };
     try {
