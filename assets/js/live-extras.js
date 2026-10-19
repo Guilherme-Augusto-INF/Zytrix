@@ -197,7 +197,7 @@ function toolbarHtml() {
       <button id="zy-theater" class="btn" type="button">▣ Modo cinema</button>
       <button id="zy-mini" class="btn" type="button">↗ Mini player</button>
       <button id="zy-clip" class="btn" type="button">✂ Criar clipe</button>
-      <a class="btn" href="denunciar.html?type=stream&target=${encodeURIComponent(streamId)}">⚑ Denunciar</a>
+      <a class="btn" href="/denunciar?type=stream&target=${encodeURIComponent(streamId)}">⚑ Denunciar</a>
     </div>
   `;
 }
@@ -285,7 +285,7 @@ async function offlineDestinationHtml() {
             return '';
         const profile = await profileFor(snap.data().streamerUid);
         const kind = stream?.raidTargetStreamId ? 'Raid' : 'Host';
-        return `<section class="${kind === 'Raid' ? 'raid-banner' : 'host-banner'}"><div><div class="eyebrow">${kind.toUpperCase()}</div><strong>Continue assistindo ${escapeHtml(profile.username || 'outro canal')}</strong></div><a class="btn btn-primary" href="live.html?stream=${encodeURIComponent(targetId)}">Ir para a live →</a></section>`;
+        return `<section class="${kind === 'Raid' ? 'raid-banner' : 'host-banner'}"><div><div class="eyebrow">${kind.toUpperCase()}</div><strong>Continue assistindo ${escapeHtml(profile.username || 'outro canal')}</strong></div><a class="btn btn-primary" href="/live?stream=${encodeURIComponent(targetId)}">Ir para a live →</a></section>`;
     }
     catch {
         return '';
@@ -460,7 +460,7 @@ async function sendReaction(emoji) {
     if (!REACTIONS.includes(emoji))
         return;
     if (!currentUser) {
-        location.href = `login.html?redirect=${encodeURIComponent(location.pathname + location.search)}`;
+        location.href = `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
         return;
     }
     if (!currentUser.emailVerified)
@@ -535,7 +535,7 @@ async function votePoll(index) {
 }
 async function createClip() {
     if (!currentUser) {
-        location.href = `login.html?redirect=${encodeURIComponent(location.pathname + location.search)}`;
+        location.href = `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
         return;
     }
     if (!currentUser.emailVerified) {
