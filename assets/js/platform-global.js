@@ -76,7 +76,7 @@ function addLevelChip(uid) {
             chip = document.createElement('a');
             chip.id = 'zytrix-level-chip';
             chip.className = 'zy-level-chip';
-            chip.href = 'perfil.html#progresso';
+            chip.href = '/perfil#progresso';
             chip.title = 'Seu nível na Zytrix';
             actions.insertBefore(chip, document.querySelector('#profile-nav') || null);
         }
