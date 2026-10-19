@@ -1,4 +1,5 @@
 import { resolve, sep } from 'node:path';
+import { existsSync } from 'node:fs';
 
 // Original V1 HTML screens plus the assets subtree, never server/SQL/private files.
 // Do not permit decoding encoded separators to turn an assets request into an
@@ -11,6 +12,8 @@ export function resolveSafePreviewPath(root, pathname) {
       || decoded.includes('//')) return null;
   if (decoded === '/') decoded = '/index.html';
   if (/^\/(termos|privacidade|politicas|diretrizes-da-comunidade|denuncias-e-moderacao|conteudo-proibido|denunciar|moderacao)$/.test(decoded)) decoded += '.html';
+  // Mirror extensionless Vercel pages locally; only existing root HTML files qualify.
+  if (/^\/[a-z0-9-]+$/.test(decoded) && existsSync(resolve(root,'.'+decoded+'.html'))) decoded += '.html';
   if (/^\/[a-z0-9-]+\.html$/.test(decoded)) return resolve(root,'.'+decoded);
   if (!decoded.startsWith('/assets/')) return null;
   const assetsRoot = resolve(root,'assets');
