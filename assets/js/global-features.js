@@ -50,7 +50,7 @@ function ensureNotificationButton(nav) {
     link = document.createElement('a');
     link.id = 'notifications-nav';
     link.className = 'icon-link notification-link';
-    link.href = 'notificacoes.html';
+    link.href = '/notificacoes';
     link.title = 'Notificações';
     link.setAttribute('aria-label', 'Abrir notificações');
     link.innerHTML = '<span aria-hidden="true">🔔</span><span id="notifications-count" class="notification-count hidden">0</span>';
@@ -70,7 +70,7 @@ function showLiveToast(channel) {
     const toast = document.createElement('a');
     toast.id = 'zytrix-live-toast';
     toast.className = 'live-toast';
-    toast.href = streamId ? `/live?stream=${encodeURIComponent(streamId)}` : 'ao-vivo.html';
+    toast.href = streamId ? `/live?stream=${encodeURIComponent(streamId)}` : '/ao-vivo';
     toast.innerHTML = `
     <strong>● ${escapeHtml(channel.channelName || 'Um canal que você segue')} está ao vivo</strong>
     <span>Toque para assistir na Zytrix.</span>
@@ -91,7 +91,7 @@ function showSupportToast(transaction) {
     const toast = document.createElement('a');
     toast.id = 'zytrix-support-toast';
     toast.className = 'live-toast';
-    toast.href = 'notificacoes.html';
+    toast.href = '/notificacoes';
     toast.setAttribute('role', 'status');
     toast.setAttribute('aria-live', 'polite');
     toast.innerHTML = `
@@ -127,7 +127,7 @@ function addAdminLink(nav, user) {
         const link = document.createElement('a');
         link.id = 'admin-nav';
         link.className = 'btn btn-ghost admin-nav-link';
-        link.href = 'admin.html';
+        link.href = '/admin';
         link.textContent = 'Admin';
         link.setAttribute('aria-label', 'Abrir painel administrativo');
         nav.appendChild(link);
