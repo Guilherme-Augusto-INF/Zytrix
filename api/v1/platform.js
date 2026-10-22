@@ -3,6 +3,8 @@ import { authenticate } from '../../server/neon/auth.mjs';
 import { platformEnabled, platformPool } from '../../server/neon/platform-pool.mjs';
 import { ApiError, executePlatform } from '../../server/neon/platform.mjs';
 import {isReadAction,readContext} from '../../server/neon/read-context.mjs';
+import {readJsonBody,PLATFORM_BODY_BYTES} from '../../server/neon/request-body.mjs';
+export const config={api:{bodyParser:false}};
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store');
   if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({error:'method_not_allowed'});}
@@ -11,9 +13,8 @@ export default async function handler(req,res) {
   if(req.headers['sec-fetch-site']==='cross-site')return res.status(403).json({error:'cross_site_denied'});
   let client;
   try {
-    let body;
-    try{body=typeof req.body==='string'?JSON.parse(req.body):req.body;}catch{throw new ApiError('invalid_input');}
-    if(!body||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body),'utf8')>16384||typeof body.action!=='string'||body.action.length>64)throw new ApiError('invalid_input');
+    const body=await readJsonBody(req,PLATFORM_BODY_BYTES);
+    if(typeof body.action!=='string'||body.action.length>64)throw new ApiError('invalid_input');
     if(isPublicProfileRead(body)){
       const source=req.headers['x-vercel-forwarded-for']??req.socket?.remoteAddress??'anonymous';
       if(!allowProfileRead(typeof source==='string'?source.split(',')[0].trim():'anonymous')){res.setHeader('Retry-After','60');throw new ApiError('rate_limited',429);}

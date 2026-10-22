@@ -1,11 +1,12 @@
 // Run from the repository: node tests/fixtures/chat-report-actions-browser.mjs /absolute/output.html
 // This isolated UI fixture never connects to Neon or submits reports.
 import { build } from 'esbuild';
+import {fileURLToPath} from 'node:url';
 import { readFile, writeFile } from 'node:fs/promises';
 const output = process.argv[2];
 if (!output) throw new Error('Specify a scratch output HTML path');
 const css = await readFile('assets/css/styles.css', 'utf8') + await readFile('assets/css/chat-report-actions.css', 'utf8');
-const result = await build({ stdin: { resolveDir: new URL('.', import.meta.url).pathname, contents: `
+const result = await build({ stdin: { resolveDir: fileURLToPath(new URL('.', import.meta.url)), contents: `
 import { createChatReportActions } from '../../assets/js/chat-report-actions.js';
 const root = document.querySelector('#fixture');
 let calls = 0;
