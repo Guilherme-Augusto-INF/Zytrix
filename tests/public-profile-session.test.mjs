@@ -2,9 +2,9 @@ import test from 'node:test';import assert from 'node:assert/strict';import vm f
 function harness(request){
  const button={hidden:true,disabled:false,textContent:'',setAttribute(){}},manage={hidden:true},message={textContent:''};
  const root={querySelector:s=>({'#public-follow':button,'#public-manage':manage,'#public-status':message}[s])};
- const source=readFileSync(new URL('../assets/js/public-profile.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace("onAuthStateChanged(auth,value=>{user=value;if(state?.profile)void followState();});\nvoid load();",'');
- const context=vm.createContext({URLSearchParams,document:{querySelector:()=>root},location:{search:'?uid=12345678-1234-4234-8234-123456789012'},header(){},footer(){},createPlatformClient:()=>()=>{},publicProfileUrl:()=>'/usuario.html',publicPlatform:request});
- vm.runInContext(source+'\nglobalThis.prepare=(value)=>{state={profile:{},channel:{id:"channel"}};user=value;};globalThis.check=followState;',context);return {context,button,message};
+ const source=readFileSync(new URL('../assets/js/public-profile.js',import.meta.url),'utf8').replace(/\r\n/g,'\n').replace(/^import .*;\n/gm,'').replace("onAuthStateChanged(auth,value=>{user=value;if(state?.profile)void followState();});\nvoid load();",'');
+ const context=vm.createContext({URLSearchParams,document:{querySelector:()=>root},location:{pathname:'/@streamer',search:'?uid=12345678-1234-4234-8234-123456789012'},header(){},footer(){},createPlatformClient:()=>()=>{},publicProfileUrl:()=>'/@streamer',profileRouteUsername:()=> 'streamer',publicPlatform:request});
+ vm.runInContext(source+'\nglobalThis.prepare=(value)=>{'+(source.includes('let uid=null;')?'uid="12345678-1234-4234-8234-123456789012";':'')+'state={profile:{},channel:{id:"channel"}};user=value;};globalThis.check=followState;',context);return {context,button,message};
 }
 test('follow waits for authoritative state and does not act on failed state reads',async()=>{
  let finish;const h=harness(()=>new Promise(resolve=>{finish=resolve;}));h.context.prepare({uid:'other'});const pending=h.context.check();assert.equal(h.button.disabled,true);assert.equal(h.button.textContent,'Verificando…');finish({following:[]});await pending;assert.equal(h.button.disabled,false);assert.equal(h.button.textContent,'Seguir canal');

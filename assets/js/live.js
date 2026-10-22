@@ -213,7 +213,7 @@ function render() {
               <h1 style="margin:8px 0">${escapeHtml(stream.title || 'Transmissão')}</h1>
               <p class="muted">${escapeHtml(stream.description || '')}</p>
 
-              <a class="profile-link" href="${escapeAttr(publicProfileUrl(stream.streamerUid))}" style="display:flex;align-items:center;gap:9px">
+              <a class="profile-link" href="${escapeAttr(publicProfileUrl(streamerProfile.username))}" style="display:flex;align-items:center;gap:9px">
                 ${streamerProfile?.photoURL
         ? `<img class="avatar" src="${escapeAttr(safeImageUrl(streamerProfile.photoURL))}" referrerpolicy="no-referrer" alt="${escapeHtml(username)}">`
         : `<span class="avatar">${escapeHtml(username.charAt(0).toUpperCase())}</span>`}
@@ -459,7 +459,7 @@ function renderChatMessages(messages) {
         body.className = 'chat-message-body';
         const meta = document.createElement('div');
         meta.className = 'chat-message-meta';
-        const href = publicProfileUrl(message.uid);
+        const href = publicProfileUrl(profile.username);
         const name = document.createElement(href ? 'a' : 'strong');
         if(href){name.href=href;name.className='profile-link';}
         const avatarLink=document.createElement(href?'a':'span');

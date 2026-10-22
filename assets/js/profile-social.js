@@ -57,7 +57,7 @@ function render() {
         ? followedChannels.slice(0, 8).map(channel => `
           <div class="followed-item">
             <div class="followed-main">
-              <a class="profile-link" href="${publicProfileUrl(channel.id)}">${escapeHtml(channel.channelName || 'Streamer')}</a>
+              <a class="profile-link" href="${publicProfileUrl(channel.username)}">${escapeHtml(channel.channelName || 'Streamer')}</a>
               <span class="${channel.isLive ? 'live-indicator' : 'offline-indicator'}">
                 ${channel.isLive ? '● AO VIVO' : 'OFFLINE'}
               </span>

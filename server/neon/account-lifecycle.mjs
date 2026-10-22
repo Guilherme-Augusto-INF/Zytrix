@@ -1,4 +1,5 @@
 import {ApiError} from './platform.mjs';
+import {randomUUID} from 'node:crypto';
 // Caller owns the transaction. Retain internal IDs and all financial/moderation references.
 export async function deleteAccount(c,identity,data) {
  if(!identity||identity.authProvider!=='neon')throw new ApiError('authentication_required',401);
@@ -17,7 +18,9 @@ export async function deleteAccount(c,identity,data) {
  on conflict do nothing`,[user]);
  await c.query("update private.image_assets set state='delete_pending',updated_at=now() where owner_id=$1 and state in('pending','active')",[user]);
  await c.query('update public.user_accounts set disabled_at=now(),deleted_at=now() where user_id=$1',[user]);
- await c.query('update public.profiles set username=$2,bio=\'\',photo_url=\'\' where user_id=$1',[user,'gone_'+user.replaceAll('-','').slice(0,24)]);
+ // A predictable tombstone can be claimed/retired in advance to deny deletion.
+ // Keep the account ID stable but choose an unguessable, valid username.
+ await c.query('update public.profiles set username=$2,bio=\'\',photo_url=\'\' where user_id=$1',[user,'gone_'+randomUUID().replaceAll('-','').slice(0,24)]);
  await c.query("update public.lives set status=case when status='live' then 'ended' else status end,ended_at=coalesce(ended_at,now()),deleted_at=now(),visibility='private',title='Conteúdo removido',description='',playback_url='',thumbnail_url='',vod_url=null,raid_target_live_id=null,host_target_live_id=null where owner_id=$1",[user]);
  await c.query("update public.channels set deleted_at=now(),visibility='private',is_live=false,current_live_id=null,name='Conta excluída',description='',avatar_url='',banner_url='' where owner_id=$1",[user]);
  await c.query("update public.channel_profiles set about='',games='',website='',youtube='',instagram='',tiktok='' where channel_id in(select id from public.channels where owner_id=$1)",[user]);
