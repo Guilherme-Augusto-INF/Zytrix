@@ -7,12 +7,12 @@ export function authBase() {
   if (!value || value !== AUTH_URL) return null;
   return value;
 }
-export function createNeonVerifier({baseUrl=AUTH_URL, fetchImpl=fetch, now=()=>Date.now()}={}) {
+export function createNeonVerifier({baseUrl=AUTH_URL, jwksPath='/.well-known/jwks.json', provider='neon', fetchImpl=fetch, now=()=>Date.now()}={}) {
   let keys, expires=0, pending, lastRefresh=0;
   async function refresh() {
     if (pending) return pending;
     pending=(async()=>{
-      const response=await fetchImpl(`${baseUrl}/.well-known/jwks.json`,{signal:AbortSignal.timeout(5000),redirect:'error'});
+      const response=await fetchImpl(`${baseUrl}${jwksPath}`,{signal:AbortSignal.timeout(5000),redirect:'error'});
       if (!response.ok) throw Error('jwks_unavailable');
       const data=await response.json();
       if (!Array.isArray(data.keys) || data.keys.length>20) throw Error('invalid_jwks');
@@ -37,7 +37,7 @@ export function createNeonVerifier({baseUrl=AUTH_URL, fetchImpl=fetch, now=()=>D
       if(!jwk&&now()-lastRefresh>=30000){await refresh();jwk=keys.find(k=>k.kid===header.kid&&k.kty==='OKP'&&k.crv==='Ed25519');}
       if(!jwk||!verify(null,Buffer.from(`${parts[0]}.${parts[1]}`),createPublicKey({key:jwk,format:'jwk'}),Buffer.from(parts[2],'base64url')))return null;
       if(claims.banned===true)return null;
-      return {uid:claims.sub,subject:claims.sub,authProvider:'neon',email:typeof claims.email==='string'?claims.email:null,
+      return {uid:claims.sub,subject:claims.sub,authProvider:provider,email:typeof claims.email==='string'?claims.email:null,
         emailVerified:claims.emailVerified===true,expiresAt:claims.exp,authTime:claims.iat,provider:null};
     } catch {return null;}
   };

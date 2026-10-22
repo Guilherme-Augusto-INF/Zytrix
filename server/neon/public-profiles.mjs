@@ -1,7 +1,8 @@
+import {authUserTable} from '../auth/provider.mjs';
 import {ApiError} from './platform.mjs';
 import {safeImageUrl} from '../../assets/js/security.js';
 // Fixed SQL fragments only: never interpolate request input into SQL.
-export const activeProfileFilter = column => `exists(select 1 from public.user_accounts pa join neon_auth."user" pn on pn.id=pa.user_id where pa.user_id=${column} and pa.deleted_at is null and pa.disabled_at is null and not coalesce(pn.banned,false)) and not exists(select 1 from public.moderation_penalties pp where pp.user_id=${column} and pp.type='ban' and pp.active and (pp.expires_at is null or pp.expires_at>now()))`;
+export const activeProfileFilter = column => `exists(select 1 from public.user_accounts pa join ${authUserTable()} pn on pn.id=pa.user_id where pa.user_id=${column} and pa.deleted_at is null and pa.disabled_at is null and not coalesce(pn.banned,false)) and not exists(select 1 from public.moderation_penalties pp where pp.user_id=${column} and pp.type='ban' and pp.active and (pp.expires_at is null or pp.expires_at>now()))`;
 export function profileUid(value) {
  if(typeof value!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))throw new ApiError('invalid_uid');
  return value.toLowerCase();

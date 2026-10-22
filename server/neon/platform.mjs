@@ -1,3 +1,4 @@
+import {authUserTable,authAccountTable,expectedAuthProvider} from '../auth/provider.mjs';
 import { randomUUID, createHash } from 'node:crypto';
 
 import {publicProfile, publicNetwork, activeProfileFilter, profileUid} from './public-profiles.mjs';
@@ -17,13 +18,13 @@ const key = value => typeof value === 'string' && /^[A-Za-z0-9_-]{16,100}$/.test
 export async function actor(c, identity, verified = false) {
   if (!identity) fail('authentication_required', 401);
   if (verified && !identity.emailVerified) fail('verified_email_required', 403);
-  if(identity.authProvider!=='neon')fail('authentication_required',401);
+  if(!expectedAuthProvider(identity))fail('authentication_required',401);
   const cached=actorReads(c);
   if(cached?.has(identity.subject))return cached.get(identity.subject);
   // Readers can run together; account deletion and every mutation retain the
   // exclusive lock, so no read can race an in-flight account mutation.
   await c.query(cached?'select pg_advisory_xact_lock_shared(hashtextextended($1,0))':'select pg_advisory_xact_lock(hashtextextended($1,0))',['account:'+identity.subject]);
-  const r=await c.query(`select i.id,exists(select 1 from public.admins adm where adm.user_id=i.id and adm.active and adm.revoked_at is null) as admin from public.identities i join public.user_accounts a on a.user_id=i.id join neon_auth."user" n on n.id=i.id where i.id=$1::uuid and a.disabled_at is null and not coalesce(n.banned,false)`,[identity.subject]);
+  const r=await c.query(`select i.id,exists(select 1 from public.admins adm where adm.user_id=i.id and adm.active and adm.revoked_at is null) as admin from public.identities i join public.user_accounts a on a.user_id=i.id join ${authUserTable()} n on n.id=i.id where i.id=$1::uuid and a.disabled_at is null and not coalesce(n.banned,false)`,[identity.subject]);
   if (!r.rowCount) fail('profile_not_found', 403);
   const user = r.rows[0];
   const penalty = await c.query(`select type from public.moderation_penalties where user_id=$1 and active
@@ -331,8 +332,8 @@ export async function executePlatform(c, identity, action, data = {}) {
     }
     case 'me': {
       const u=await actor(c,identity);
-      const r=await c.query(`select a.zytrix_id as "zytrixId",n.email,(select case when exists(select 1 from neon_auth.account acc where acc."userId"=a.user_id and acc."providerId"='google') then 'google' else 'password' end) as provider,p.username,p.photo_url as "photoURL",p.bio
-        from public.user_accounts a join neon_auth."user" n on n.id=a.user_id left join public.profiles p on p.user_id=a.user_id where a.user_id=$1`,[u.id]);
+      const r=await c.query(`select a.zytrix_id as "zytrixId",n.email,(select case when exists(select 1 from ${authAccountTable()} acc where acc."userId"=a.user_id and acc."providerId"='google') then 'google' else 'password' end) as provider,p.username,p.photo_url as "photoURL",p.bio
+        from public.user_accounts a join ${authUserTable()} n on n.id=a.user_id left join public.profiles p on p.user_id=a.user_id where a.user_id=$1`,[u.id]);
       return { account:r.rows[0]??null,admin:u.admin };
     }
     case 'profile.recover': {

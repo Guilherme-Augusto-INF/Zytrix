@@ -1,0 +1,17 @@
+# Isolated preview only until cutover criteria are satisfied.
+ZYTRIX_AUTH_PROVIDER=better-auth
+ZYTRIX_AUTH_ORIGIN=https://REPLACE_WITH_PREVIEW_DOMAIN
+ZYTRIX_AUTH_DATABASE_URL=postgresql://zytrix_auth_service:REPLACE@REPLACE.neon.tech/neondb?sslmode=require
+DATABASE_URL=postgresql://zytrix_runtime:REPLACE@REPLACE.neon.tech/neondb?sslmode=require
+ZYTRIX_AUTH_SECRET=REPLACE_WITH_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
+ZYTRIX_GOOGLE_CLIENT_ID=REPLACE
+ZYTRIX_GOOGLE_CLIENT_SECRET=REPLACE
+ZYTRIX_SMTP_HOST=REPLACE
+ZYTRIX_SMTP_PORT=465
+ZYTRIX_SMTP_USER=REPLACE
+ZYTRIX_SMTP_PASSWORD=REPLACE
+ZYTRIX_SMTP_FROM=REPLACE
+# Production only, after verifying retirement of managed writes:
+# ZYTRIX_MANAGED_AUTH_RETIRED=true
+# Local tests only:
+# ZYTRIX_AUTH_ALLOW_LOCALHOST=true

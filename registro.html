@@ -55,7 +55,8 @@
      <label for="register-password">
       Senha
      </label>
-     <input class="input" minlength="6" id="register-password" name="password" required="" type="password"/>
+     <input class="input" minlength="8" maxlength="128" id="register-password" name="password" required="" type="password" aria-describedby="register-password-help"/>
+     <p class="muted" id="register-password-help">Use de 8 a 128 caracteres, incluindo pelo menos uma letra e um número.</p>
     </div>
     <button data-auth-pending disabled class="btn btn-purple" style="width:100%">
      Criar conta

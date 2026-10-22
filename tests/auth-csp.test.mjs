@@ -6,6 +6,16 @@ const vercel = JSON.parse(readFileSync('vercel.json', 'utf8'));
 const globalHeaders = vercel.headers.find(item => item.source === '/(.*)')?.headers || [];
 const csp = globalHeaders.find(item => item.key === 'Content-Security-Policy')?.value || '';
 
+test('registration and reset inputs use password limits 8 through 128',()=>{
+ const html=readFileSync('registro.html','utf8');
+ const input=html.match(/<input\b[^>]*id="register-password"[^>]*>/)?.[0];
+ assert.ok(input);assert.match(input,/minlength="8"/);assert.match(input,/maxlength="128"/);
+ const source=readFileSync('assets/js/neon-auth-page.js','utf8');
+ const reset=source.match(/<input\b[^>]*id="new-password"[^>]*>/)?.[0];
+ assert.ok(reset);assert.match(reset,/minlength="8"/);assert.match(reset,/maxlength="128"/);
+ assert.doesNotMatch(source,/10 caracteres|minlength="10"/);
+});
+
 test('CSP libera o authDomain exato do Neon para o iframe de login', () => {
   assert.match(csp, /frame-src[^;]*https:\/\/ep-icy-night-b6fvg1ni\.neonauth\.c-2\.sa-east-1\.aws\.neon\.tech/);
   assert.match(csp, /connect-src[^;]*https:\/\/ep-icy-night-b6fvg1ni\.neonauth\.c-2\.sa-east-1\.aws\.neon\.tech/);

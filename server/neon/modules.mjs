@@ -1,3 +1,4 @@
+import {authUserTable,authAccountTable,expectedAuthProvider,sessionFunction} from '../auth/provider.mjs';
 import {activeProfileFilter,profileUid} from './public-profiles.mjs';
 import {managedImageUrl} from '../../assets/js/image-policy.js';
 import {randomUUID} from 'node:crypto';
@@ -28,8 +29,8 @@ export async function executeModules(c,identity,action,data,ctx) {
   return {config,policies:config?await rows(c,`select policy,version,scope,source_sha256 as "sourceSha256",document from public.policy_versions where (policy in ('terms','privacy') and version in($1,$2)) or (policy in ('community_guidelines','content_policy') and version=$3) order by policy`,[config.termsVersion,config.privacyVersion,config.rulesVersion]):[]};
  }
  case 'auth.logout': {
-  if(!identity||identity.authProvider!=='neon'||!identity.sessionToken)fail('authentication_required',401);
-  await c.query('select private.revoke_auth_session($1::uuid,$2)',[identity.subject,identity.sessionToken]);
+  if(!identity||!expectedAuthProvider(identity)||!identity.sessionToken)fail('authentication_required',401);
+  await c.query(`select ${sessionFunction('revoke')}($1::uuid,$2)`,[identity.subject,identity.sessionToken]);
   return {signedOut:true};
  }
  case 'viewer.count': {
@@ -59,7 +60,7 @@ export async function executeModules(c,identity,action,data,ctx) {
  }
  case 'auth.identity': {
   const u=await actor(c,identity);
-  const accounts=await rows(c,'select "providerId" from neon_auth.account where "userId"=$1',[u.id]);
+  const accounts=await rows(c,`select "providerId" from ${authAccountTable()} where "userId"=$1`,[u.id]);
   const accepted=await one(c,'select 1 from public.policy_acceptances where user_id=$1 limit 1',[u.id]);
   return {uid:u.id,admin:u.admin,provider:accounts.some(a=>a.providerId==='google')?'google':'password',enrollmentRequired:!accepted};
  }
@@ -183,8 +184,8 @@ async function readDocument(c,identity,data,ctx) {
  else if(kind==='categories')list=(await ctx.executePlatform(c,identity,'categories.list',{})).categories.map(x=>({...x,id:x.id}));
  else if(kind==='users'){
   if(!sub){
-   if(identifier){owned(identifier);list=await rows(c,`select user_id::text as id,user_id::text as uid,zytrix_id as "zytrixId",(select email from neon_auth."user" n where n.id=user_id) as email,(select case when exists(select 1 from neon_auth.account acc where acc."userId"=user_id and acc."providerId"='google') then 'google' else 'password' end) as provider,created_at as "createdAt" from public.user_accounts where user_id=$1`,[u.id]);}
-   else {const lookup=data.constraints?.find(x=>x.type==='where'&&x.field==='zytrixId'&&x.op==='==');if(!u)fail('forbidden',403);if(lookup)list=await rows(c,'select user_id::text as id,user_id::text as uid,zytrix_id as "zytrixId" from public.user_accounts where zytrix_id=$1 limit 1',[str(lookup.value,128,1)]);else if(u.admin)list=await rows(c,`select a.user_id::text as id,a.user_id::text as uid,a.zytrix_id as "zytrixId",n.email,a.created_at as "createdAt" from public.user_accounts a join neon_auth."user" n on n.id=a.user_id order by a.created_at desc,a.user_id limit 200`);else fail('forbidden',403);}
+   if(identifier){owned(identifier);list=await rows(c,`select user_id::text as id,user_id::text as uid,zytrix_id as "zytrixId",(select email from ${authUserTable()} n where n.id=user_id) as email,(select case when exists(select 1 from ${authAccountTable()} acc where acc."userId"=user_id and acc."providerId"='google') then 'google' else 'password' end) as provider,created_at as "createdAt" from public.user_accounts where user_id=$1`,[u.id]);}
+   else {const lookup=data.constraints?.find(x=>x.type==='where'&&x.field==='zytrixId'&&x.op==='==');if(!u)fail('forbidden',403);if(lookup)list=await rows(c,'select user_id::text as id,user_id::text as uid,zytrix_id as "zytrixId" from public.user_accounts where zytrix_id=$1 limit 1',[str(lookup.value,128,1)]);else if(u.admin)list=await rows(c,`select a.user_id::text as id,a.user_id::text as uid,a.zytrix_id as "zytrixId",n.email,a.created_at as "createdAt" from public.user_accounts a join ${authUserTable()} n on n.id=a.user_id order by a.created_at desc,a.user_id limit 200`);else fail('forbidden',403);}
   }else{
    owned(identifier);
    if(sub==='following')list=await rows(c,`select ch.public_id as id,ch.public_id as "channelId",f.followed_at as "followedAt" from public.follows f join public.channels ch on ch.id=f.channel_id where f.follower_id=$1 and ch.deleted_at is null order by f.followed_at desc,ch.id limit 200`,[u.id]);

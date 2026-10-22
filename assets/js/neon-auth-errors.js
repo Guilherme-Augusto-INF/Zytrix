@@ -1,5 +1,7 @@
 // Public messages deliberately omit provider payloads, addresses and internal details.
 export function neonAuthMessage(error, step = 'login') {
+    if (['INVALID_PASSWORD_POLICY', 'PASSWORD_TOO_SHORT', 'PASSWORD_TOO_LONG'].includes(error?.code))
+        return 'Use uma senha de 8 a 128 caracteres, incluindo pelo menos uma letra e um número.';
     if (step === 'google' && ['state_mismatch', 'STATE_MISMATCH'].includes(error?.code))
         return 'A confirmação do Google expirou ou perdeu a sessão. Volte à tela de login e inicie uma nova tentativa. Sua conta não foi vinculada.';
     if (error?.message === 'authentication_changed')

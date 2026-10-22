@@ -1,6 +1,7 @@
 import { createPlatformClient } from './staging-client.js';
 import { watchRealtime } from './realtime-client.js';
 import { createManagedClient } from './neon-managed-client.js';
+import { strongPassword } from './security.js';
 export const app = null, db = Object.freeze({ backend: 'neon' }), googleProvider = { providerId: 'google.com' };
 export const auth = { currentUser: null };
 export class GoogleAuthProvider {
@@ -10,20 +11,27 @@ const listeners = new Set();
 let configPromise, refreshPromise, generation = 0, loaded = false, jwtCache, jwtPending, managedClient;
 const changes = globalThis.BroadcastChannel ? new BroadcastChannel('zytrix-neon-session') : null;
 const platform = createPlatformClient(() => auth.currentUser);
-async function config() { return configPromise ??= fetch('/api/v1/config', { cache: 'no-store' }).then(async (r) => { const c = await r.json(); if (!r.ok || !c.postgresEnabled || c.authentication !== 'neon' || !c.neonAuthUrl)
-    throw Error('neon_auth_not_configured'); return c; }); }
+async function config() { return configPromise ??= fetch('/api/v1/config', { cache: 'no-store' }).then(async (r) => { const c = await r.json(); if (!r.ok || !c.postgresEnabled || !['neon','better-auth'].includes(c.authentication) || !(c.authentication==='neon'?c.neonAuthUrl:c.authUrl))
+    throw Error('neon_auth_not_configured');
+    if(c.authentication==='better-auth'&&(new URL(c.authUrl,location.href).origin!==new URL(location.href).origin||new URL(c.authUrl,location.href).pathname!=='/api/auth'))throw Error('auth_origin_invalid');
+    return c; }); }
 export async function authRequest(path, body) {
+    // Validate only new passwords; existing credentials remain valid for sign-in.
+    const passwordField = path === 'sign-up/email' ? 'password' : ['reset-password', 'change-password', 'set-password'].includes(path) ? 'newPassword' : null;
+    if (passwordField && (typeof body?.[passwordField] !== 'string' || !strongPassword(body[passwordField])))
+        throw Object.assign(Error('invalid_password'), { code: 'INVALID_PASSWORD_POLICY' });
     const c = await config();
     // Managed OAuth requires Neon's verifier exchange and cookie handling. Always
     // fetch a fresh session before deriving the current identity.
-    if (['get-session', 'sign-in/social'].includes(path)) {
+    if (c.authentication==='neon'&&['get-session', 'sign-in/social'].includes(path)) {
         managedClient ??= createManagedClient(c.neonAuthUrl);
         const result = await managedClient.$fetch('/' + path, { method: body ? 'POST' : 'GET', credentials: 'include', cache: 'no-store', headers: { 'X-Force-Fetch': 'true' }, ...(body ? { body: { ...body, ...(path === 'sign-in/social' ? { disableRedirect: true } : {}) } } : {}), signal: AbortSignal.timeout(15000) });
         if (result.error)
             throw Object.assign(Error('authentication_failed'), { code: result.error.code ?? 'authentication_failed', status: result.error.status });
         return result.data;
     }
-    const response = await fetch(c.neonAuthUrl + '/' + path, { method: body ? 'POST' : 'GET', credentials: 'include', cache: 'no-store', headers: body ? { 'Content-Type': 'application/json' } : {}, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15000) });
+    const base=c.authentication==='better-auth'?c.authUrl:c.neonAuthUrl;
+    const response = await fetch(base + '/' + path, { method: body ? 'POST' : 'GET', credentials: 'include', cache: 'no-store', headers: body ? { 'Content-Type': 'application/json' } : {}, ...(body ? { body: JSON.stringify({...body,...(path==='sign-in/social'?{disableRedirect:true}:{})}) } : {}), signal: AbortSignal.timeout(15000) });
     let value;
     try {
         value = await response.json();
