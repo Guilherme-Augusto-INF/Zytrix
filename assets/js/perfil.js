@@ -19,7 +19,7 @@ let walletUnsubscribe = null;
 let creatingChannel = false;
 let closingAccount = false;
 globalThis.addEventListener('zytrix-auth-unavailable', () => {
-    if (!user) root.innerHTML = '<div class="state">Não foi possível confirmar sua sessão. <a href="perfil.html">Tentar novamente</a></div>';
+    if (!user) root.innerHTML = '<div class="state">Não foi possível confirmar sua sessão. <a href="/perfil">Tentar novamente</a></div>';
 });
 function dateText(timestamp) {
     try {
@@ -221,7 +221,7 @@ function render() {
           </p>
 
           ${stream
-            ? `<a class="btn btn-primary" href="config-live.html">Configurar live</a>`
+            ? `<a class="btn btn-primary" href="/config-live">Configurar live</a>`
             : `<p class="muted">O canal existe, mas sua transmissão não foi encontrada. Vincule novamente seu canal para recuperar a configuração.</p>
                <div class="form-group"><label for="stream-url">Link do YouTube, Twitch ou Kick</label><input id="stream-url" class="input" type="url" autocomplete="url" placeholder="https://www.twitch.tv/seu_canal"></div>
                <button id="be-streamer" class="btn btn-primary">Recuperar minha live</button>
@@ -266,7 +266,7 @@ function render() {
     </div>
 
     <div style="margin-top:16px">
-      <a class="btn btn-danger" href="sair.html">Sair da conta</a>
+      <a class="btn btn-danger" href="/sair">Sair da conta</a>
     </div>
   `;
     document.querySelector('#edit-toggle').onclick = () => {
@@ -395,7 +395,7 @@ async function createStreamer() {
         if (saved.channelId !== user.uid || !saved.streamId)
             throw new Error('channel-verification-failed');
         // The next page loads the persisted channel and stream independently.
-        location.href = 'config-live.html';
+        location.href = '/config-live';
     }
     catch (error) {
         console.error('Erro ao criar/recuperar canal:', error);
@@ -424,7 +424,7 @@ async function deleteAccount() {
         walletUnsubscribe?.();
         await (await import('./neon-browser.js')).signOut().catch(() => {});
         for (const key of ['zytrixSelectedStream', 'zytrixSelectedStreamName', 'zytrixSelectedStreamTitle']) localStorage.removeItem(key);
-        location.href = 'index.html';
+        location.href = '/';
     } catch (error) {
         closingAccount = false;
         message.textContent = error.code === 'recent_login_required' ? 'Entre novamente e repita a exclusão nos próximos cinco minutos.' : 'Não foi possível excluir a conta.';
@@ -434,7 +434,7 @@ onAuthStateChanged(auth, async (currentUser) => {
     if (!currentUser) {
         if (closingAccount)
             return;
-        location.href = 'login.html';
+        location.href = '/login';
         return;
     }
     user = currentUser;

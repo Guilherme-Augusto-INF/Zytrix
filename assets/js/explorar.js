@@ -139,9 +139,9 @@ function render() {
 
     <section class="section"><div class="section-head"><div><div class="eyebrow">COMEÇANDO AGORA</div><h2>Transmissões recentes</h2></div></div><div class="grid grid-4">${starting.length ? starting.map(liveCard).join('') : '<div class="state">Nenhuma live agora.</div>'}</div></section>
 
-    <section class="section"><div class="section-head"><div><div class="eyebrow">CATEGORIAS</div><h2>Siga temas que você gosta</h2></div></div><div class="grid grid-4">${Object.keys(categories).map(c => `<article class="card panel"><div style="font-size:26px">${icons[c]}</div><strong>${escapeHtml(c)}</strong><p class="muted">${followedCategories.has(c) ? 'Você recebe mais recomendações desta categoria.' : 'Use esta categoria para personalizar a descoberta.'}</p><div class="live-interaction-row"><a class="btn" href="categoria.html?categoria=${encodeURIComponent(c)}">Abrir</a>${user ? `<button class="btn follow-category-button ${followedCategories.has(c) ? 'is-following' : ''}" data-follow-category="${escapeAttr(c)}">${followedCategories.has(c) ? 'Seguindo ✓' : 'Seguir'}</button>` : ''}</div></article>`).join('')}</div></section>
+    <section class="section"><div class="section-head"><div><div class="eyebrow">CATEGORIAS</div><h2>Siga temas que você gosta</h2></div></div><div class="grid grid-4">${Object.keys(categories).map(c => `<article class="card panel"><div style="font-size:26px">${icons[c]}</div><strong>${escapeHtml(c)}</strong><p class="muted">${followedCategories.has(c) ? 'Você recebe mais recomendações desta categoria.' : 'Use esta categoria para personalizar a descoberta.'}</p><div class="live-interaction-row"><a class="btn" href="/categoria?categoria=${encodeURIComponent(c)}">Abrir</a>${user ? `<button class="btn follow-category-button ${followedCategories.has(c) ? 'is-following' : ''}" data-follow-category="${escapeAttr(c)}">${followedCategories.has(c) ? 'Seguindo ✓' : 'Seguir'}</button>` : ''}</div></article>`).join('')}</div></section>
 
-    <section class="section"><div class="section-head"><div><div class="eyebrow">CLIPES</div><h2>Momentos da comunidade</h2></div><a class="muted" href="clips.html">Ver feed vertical →</a></div><div class="clip-grid">${clips.slice(0, 6).length ? clips.slice(0, 6).map(clipCard).join('') : '<div class="state">Nenhum clipe criado ainda.</div>'}</div></section>
+    <section class="section"><div class="section-head"><div><div class="eyebrow">CLIPES</div><h2>Momentos da comunidade</h2></div><a class="muted" href="/clips">Ver feed vertical →</a></div><div class="clip-grid">${clips.slice(0, 6).length ? clips.slice(0, 6).map(clipCard).join('') : '<div class="state">Nenhum clipe criado ainda.</div>'}</div></section>
 
     <section class="section"><div class="section-head"><div><div class="eyebrow">AGENDA</div><h2>Próximas transmissões</h2></div></div><div class="schedule-list">${schedules.length ? schedules.map(item => `<article class="schedule-card"><time>${item.startsAt.toDate().toLocaleString('pt-BR', { dateStyle: 'medium', timeStyle: 'short' })}</time><strong>${escapeHtml(item.title || 'Live')}</strong><span class="muted">Canal ${escapeHtml(item.channelId)}</span></article>`).join('') : '<div class="state">Nenhuma transmissão agendada.</div>'}</div></section>
   `;
@@ -155,14 +155,14 @@ function bindCards() {
         if (!live)
             return;
         selectStream(live);
-        location.href = `live.html?stream=${encodeURIComponent(live.id)}`;
+        location.href = `/live?stream=${encodeURIComponent(live.id)}`;
     }));
     document.querySelectorAll('[data-clip-id]').forEach(card => card.addEventListener('click', event => {
         if(event.target.closest('a,button'))return;
         const item = clips.find(clip => clip.id === card.dataset.clipId);
         if (!item)
             return;
-        location.href = `clips.html?clip=${encodeURIComponent(item.id)}`;
+        location.href = `/clips?clip=${encodeURIComponent(item.id)}`;
     }));
     document.querySelectorAll('[data-follow-category]').forEach(button => button.addEventListener('click', async () => {
         const category = button.dataset.followCategory;

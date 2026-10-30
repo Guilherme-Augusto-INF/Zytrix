@@ -335,7 +335,7 @@ async function toggle() {
 }
 onAuthStateChanged(auth, currentUser => {
     if (!currentUser) {
-        location.href = 'login.html';
+        location.href = '/login';
         return;
     }
     user = currentUser;

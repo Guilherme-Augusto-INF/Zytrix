@@ -222,7 +222,7 @@ async function loadDashboard() {
           <td><span class="${stream.status === 'live' ? 'live-indicator' : 'offline-indicator'}">${stream.status === 'live' ? '● AO VIVO' : 'OFFLINE'}</span></td>
           <td>${escapeHtml(platform)}</td>
           <td>${Number(stream.viewerCount || 0).toLocaleString('pt-BR')}</td>
-          <td><a href="live.html?stream=${encodeURIComponent(stream.id)}">Abrir</a></td>
+          <td><a href="/live?stream=${encodeURIComponent(stream.id)}">Abrir</a></td>
         </tr>
       `;
     });
@@ -354,7 +354,7 @@ onAuthStateChanged(auth, async (user) => {
       <div class="card panel">
         <h2>Acesso restrito</h2>
         <p class="muted">Entre com uma conta administrativa para continuar.</p>
-        <a class="btn btn-primary" href="login.html">Entrar</a>
+        <a class="btn btn-primary" href="/login">Entrar</a>
       </div>
     `;
         return;

@@ -78,7 +78,7 @@ export function filterMature(items = [], preferences = {}) {
 export function openMiniPlayer(streamId) {
     if (!streamId)
         return null;
-    const url = new URL('live.html', location.href);
+    const url = new URL('/live', location.href);
     url.searchParams.set('stream', streamId);
     url.searchParams.set('mini', '1');
     return window.open(url.toString(), `zytrix-mini-${streamId}`, 'popup=yes,width=720,height=460,resizable=yes,scrollbars=no');

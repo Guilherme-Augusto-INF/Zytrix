@@ -41,7 +41,7 @@ async function render() {
         <h2 style="margin:5px 0">${escapeHtml(item.title || 'Clipe')}</h2>
         <p class="muted">${escapeHtml(item.streamer?.username || 'Streamer')} · marcado por ${escapeHtml(item.creator?.username || 'usuário')}</p>
         <div class="live-interaction-row">
-          <a class="btn btn-primary" href="live.html?stream=${encodeURIComponent(item.streamId)}">Abrir transmissão</a>
+          <a class="btn btn-primary" href="/live?stream=${encodeURIComponent(item.streamId)}">Abrir transmissão</a>
           ${safeStreamingUrl(item.sourceUrl) ? `<a class="btn" href="${escapeAttr(safeStreamingUrl(item.sourceUrl))}" target="_blank" rel="noopener noreferrer external" referrerpolicy="no-referrer">Abrir origem/VOD</a>` : ''}
           <button class="btn" data-share-clip="${escapeAttr(item.id)}">Compartilhar</button>
         </div>
@@ -57,7 +57,7 @@ async function shareClip(id) {
     const item = clips.find(clip => clip.id === id);
     if (!item)
         return;
-    const url = new URL('clips.html', location.href);
+    const url = new URL('/clips', location.href);
     url.searchParams.set('clip', id);
     const data = { title: item.title || 'Clipe Zytrix', text: `Veja este momento de uma live na Zytrix (${timeLabel(item.momentSeconds)}).`, url: url.toString() };
     try {

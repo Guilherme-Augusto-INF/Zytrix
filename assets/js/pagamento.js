@@ -16,7 +16,7 @@ const root = document.querySelector('#payment-root');
 let user = null, isAdmin = false;
 function render() {
     if (!pack) {
-        root.innerHTML = '<div class="state">Nenhum pacote selecionado. <a href="loja.html">Voltar à loja</a></div>';
+        root.innerHTML = '<div class="state">Nenhum pacote selecionado. <a href="/loja">Voltar à loja</a></div>';
         return;
     }
     root.innerHTML = `<div class="card panel" style="max-width:620px;margin:auto"><div class="eyebrow">Pagamento</div><h1>Finalizar pedido</h1><div class="info-row"><strong>Zy Coins</strong><span class="coin-pill">◈ ${pack.coins.toLocaleString('pt-BR')}</span></div><div class="info-row"><strong>Total</strong><span>R$ ${(pack.priceCents / 100).toFixed(2).replace('.', ',')}</span></div><div class="form-group"><label>Forma de pagamento</label><select id="method" class="input"><option value="pix">PIX</option><option value="card">Cartão (simulação)</option></select></div><p class="muted">Esta tela é uma simulação. O projeto não coleta dados reais de cartão.</p><button id="pay" class="btn btn-primary">${isAdmin ? 'Simular pagamento aprovado' : 'Criar pedido pendente'}</button><div id="pay-msg"></div></div>`;

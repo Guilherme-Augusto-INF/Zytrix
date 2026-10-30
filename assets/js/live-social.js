@@ -107,7 +107,7 @@ function renderPanel() {
         return;
     button.onclick = async () => {
         if (!currentUser) {
-            location.href = `login.html?redirect=${encodeURIComponent(location.pathname + location.search)}`;
+            location.href = `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
             return;
         }
         button.disabled = true;

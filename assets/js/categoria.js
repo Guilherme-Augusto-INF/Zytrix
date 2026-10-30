@@ -10,8 +10,8 @@ document.querySelector('#category-title').textContent = sub ? `${category} — $
 document.querySelector('#category-icon').textContent = icons[category] || '◈';
 const subnav = document.querySelector('#subcategories');
 const subs = categories[category] || [];
-subnav.innerHTML = `<a class="filter ${!sub ? 'active' : ''}" href="categoria.html?categoria=${encodeURIComponent(category)}">Todos</a>`
-    + subs.map(value => `<a class="filter ${sub === value ? 'active' : ''}" href="categoria.html?categoria=${encodeURIComponent(category)}&subcategoria=${encodeURIComponent(value)}">${escapeHtml(value)}</a>`).join('');
+subnav.innerHTML = `<a class="filter ${!sub ? 'active' : ''}" href="/categoria?categoria=${encodeURIComponent(category)}">Todos</a>`
+    + subs.map(value => `<a class="filter ${sub === value ? 'active' : ''}" href="/categoria?categoria=${encodeURIComponent(category)}&subcategoria=${encodeURIComponent(value)}">${escapeHtml(value)}</a>`).join('');
 const grid = document.querySelector('#category-lives');
 function render(items) {
     const matches = items.filter(live => mainCategory(live.categoryId) === category
@@ -24,7 +24,7 @@ function render(items) {
         if (!live)
             return;
         selectStream(live);
-        location.href = 'live.html';
+        location.href = '/live';
     }));
 }
 const stopFeed = watchPublicLiveFeed({

@@ -166,11 +166,11 @@ jobs:
           urls = {el.text.strip() for el in tree.findall('.//s:loc', ns) if el.text}
           required_urls = {
               f'{base}/',
-              f'{base}/ao-vivo.html',
-              f'{base}/categorias.html',
-              f'{base}/recursos.html',
-              f'{base}/faq.html',
-              f'{base}/sobre.html',
+              f'{base}/ao-vivo',
+              f'{base}/categorias',
+              f'{base}/recursos',
+              f'{base}/faq',
+              f'{base}/sobre',
           }
           missing = required_urls - urls
           if missing:
@@ -181,7 +181,7 @@ jobs:
               errors.append('arquivo de verificação do Google foi alterado')
 
           ui = subprocess.check_output(['node', '--input-type=module', '-e', "import {headerMarkup,footerMarkup} from './assets/js/site-shell.js'; console.log(headerMarkup()+footerMarkup());"], text=True)
-          for href in ('recursos.html', 'faq.html', 'categorias.html', 'sobre.html'):
+          for href in ('/recursos', '/faq', '/categorias', '/sobre'):
               if href not in ui:
                   errors.append(f'layout compartilhado: link interno ausente para {href}')
 
